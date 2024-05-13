@@ -1,0 +1,8 @@
+{
+    "author" : ["Kometa Team"],
+    "install_msg" : "Thank you for installing the Kometa Team Discord Cog Repository. These cogs are solely intended for use within the Kometa Discord.",
+    "name" : "Kometa",
+    "short" : "Cogs for the Kometa Discord Server",
+    "description" : "Cogs for the Kometa Discord Server.",
+    "tags" : ["utility", "functionalities"]
+}
