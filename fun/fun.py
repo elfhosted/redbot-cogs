@@ -55,9 +55,11 @@ class RedBotCogFun(commands.Cog):
     async def react_with_image(self, message, reaction_trigger):
         mylogger.info(f"Message matches '{reaction_trigger}'")
 
+        # Get the directory path of the current cog
+        cog_directory = os.path.dirname(__file__)
+
         # Specify the directory containing the images based on the reaction trigger
-        # reaction_images_dir = f'/opt/red-luma/cogs/fun/{reaction_trigger}'
-        reaction_images_dir = f'./{reaction_trigger}'
+        reaction_images_dir = os.path.join(cog_directory, reaction_trigger)
 
         if os.path.exists(reaction_images_dir) and os.path.isdir(reaction_images_dir):
             mylogger.info(f"Directory {reaction_images_dir} exists and is accessible.")
