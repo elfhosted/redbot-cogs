@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'threads' cog. Have fun! This cog works with the support forums to welcome user to help and provide information as well as share how to close the thread and archive it",
+    "name" : "threads",
+    "short" : "This cog works with the support forums to welcome user to help and provide information as well as share how to close the thread and archive it",
+    "requirements" : ["None"],
+    "description" : "This cog works with the support forums to welcome user to help and provide information as well as share how to close the thread and archive it",
+    "permissions" : ["Not sure"],
+    "tags" : ["threads, embeds, auto-responder"]
+}
