@@ -56,9 +56,8 @@ class RedBotCogFun(commands.Cog):
         mylogger.info(f"Fun Message matches '{reaction_trigger}'")
 
         # Get the directory path of the current cog
-        mylogger.info(f"cog_directory1 {cog_directory}")
         cog_directory = os.path.dirname(__file__)
-        mylogger.info(f"cog_directory2 {cog_directory}")
+        mylogger.info(f"cog_directory: {cog_directory}")
 
         # Specify the directory containing the images based on the reaction trigger
         reaction_images_dir = os.path.join(cog_directory, reaction_trigger)
