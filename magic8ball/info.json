@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'magic8ball' cog. Have fun! Activate with `!magic8ball <question>`",
+    "name" : "magic8ball",
+    "short" : "This cog will react to `!magic8ball` within your server and share a random magic8ball answer as an embed back to the user",
+    "requirements" : ["None"],
+    "description" : "This cog will react to `!magic8ball` within your server and share a random magic8ball answer as an embed back to the user",
+    "permissions" : ["Not sure"],
+    "tags" : ["magic8ball, embeds, auto-responder"]
+}
