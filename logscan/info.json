@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'logscan' cog. Have fun! Activate with `!logscan <message_link>` to review a kometa meta.log and make reccomendstions",
+    "name" : "logscan",
+    "short" : "Activate with `!logscan <message_link>` to review a kometa meta.log and make reccomendstions",
+    "requirements" : ["None"],
+    "description" : "Activate with `!logscan <message_link>` to review a kometa meta.log and make reccomendstions",
+    "permissions" : ["Not sure"],
+    "tags" : ["logscan, embeds, auto-responder"]
+}
