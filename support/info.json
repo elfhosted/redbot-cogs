@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'support' cog. Have fun! Activate with `!support <message_link>` to move one message to the help forums",
+    "name" : "support",
+    "short" : "Activate with `!support <message_link>` to move one message to the help forums",
+    "requirements" : ["None"],
+    "description" : "Activate with `!support <message_link>` to move one message to the help forums",
+    "permissions" : ["Not sure"],
+    "tags" : ["support, embeds, auto-responder"]
+}
