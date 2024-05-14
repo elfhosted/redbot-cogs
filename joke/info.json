@@ -3,7 +3,7 @@
     "install_msg" : "You have just installed the 'joke' cog. Have fun!",
     "name" : "joke",
     "short" : "This cog will react to `!joke` within your server and share a random joke as an embed back to the user",
-    "requirements" : ["json", "random", "logging", "requests", "discord"],
+    "requirements" : ["None"],
     "description" : "This cog will react to `!joke` within your server and share a random joke as an embed back to the user",
     "permissions" : ["Not sure"],
     "tags" : ["joke, embeds, auto-responder"]
