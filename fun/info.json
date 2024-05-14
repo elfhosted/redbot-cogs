@@ -3,7 +3,7 @@
     "install_msg" : "You have just installed the 'fun' cog. Have fun!",
     "name" : "fun",
     "short" : "This cog will react to words within your server and share a random animated gif or other as an embed back to the user",
-    "requirements" : ["None"],
+    "requirements" : ["random", "discord", "logging"],
     "description" : "This cog will react to words within your server and share a random animated gif or other as an embed back to the user",
     "permissions" : ["Not sure"],
     "tags" : ["fun, embeds, auto-responder"]
