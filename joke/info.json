@@ -1,6 +1,6 @@
 {
     "author" : ["Kometa-Team"],
-    "install_msg" : "You have just installed the 'joke' cog. Have fun!",
+    "install_msg" : "You have just installed the 'joke' cog. Have fun! Activate with `!joke`",
     "name" : "joke",
     "short" : "This cog will react to `!joke` within your server and share a random joke as an embed back to the user",
     "requirements" : ["None"],

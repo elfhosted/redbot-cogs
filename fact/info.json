@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'fact' cog. Have fun! Activate with `!fact`",
+    "name" : "fact",
+    "short" : "This cog will react to `!fact` within your server and share a random fact as an embed back to the user",
+    "requirements" : ["None"],
+    "description" : "This cog will react to `!fact` within your server and share a random fact as an embed back to the user",
+    "permissions" : ["Not sure"],
+    "tags" : ["fact, embeds, auto-responder"]
+}

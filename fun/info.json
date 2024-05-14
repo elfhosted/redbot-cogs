@@ -1,6 +1,6 @@
 {
     "author" : ["Kometa-Team"],
-    "install_msg" : "You have just installed the 'fun' cog. Have fun!",
+    "install_msg" : "You have just installed the 'fun' cog. Have fun! Activate with `yay` and other secret acronyms",
     "name" : "fun",
     "short" : "This cog will react to words within your server and share a random animated gif or other as an embed back to the user",
     "requirements" : ["None"],
