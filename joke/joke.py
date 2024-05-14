@@ -19,8 +19,10 @@ class MyJoke(commands.Cog):
         self.load_sent_jokes()
 
     def load_sent_jokes(self):
+        cog_directory = os.path.dirname(__file__)
+        output_dir = os.path.join(cog_directory, 'sent_jokes.json')
         try:
-            with open('sent_jokes.json', 'r') as file:
+            with open(output_dir, 'r') as file:
                 self.sent_jokes = set(json.load(file))
         except FileNotFoundError:
             pass  # Ignore if the file doesn't exist
@@ -33,7 +35,7 @@ class MyJoke(commands.Cog):
 
         with open(output_dir, 'w') as file:
             json.dump(list(self.sent_jokes), file)
-        mylogger.info(f"Total jokes saved in 'sent_jokes.json': {len(self.sent_jokes)}")
+        mylogger.info(f"Total jokes saved in '{output_dir}': {len(self.sent_jokes)}")
 
     @commands.command(name="joke")
     @app_commands.describe(message_link="Request a useless joke")
