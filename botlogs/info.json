@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'botlogs' cog. Have fun! Activate with `!botlogs <num_lines>` or just `!botlogs` to grab the last 50 lines",
+    "name" : "botlogs",
+    "short" : "This cog will react to `!botlogs` (default of last 50 lines) or `!botlogs <num_lines>` within your server and share the logs from the current bot.",
+    "requirements" : ["None"],
+    "description" : "This cog will react to `!botlogs` (default of last 50 lines) or `!botlogs <num_lines>` within your server and share the logs from the current bot.",
+    "permissions" : ["Not sure"],
+    "tags" : ["botlogs, embeds, auto-responder"]
+}
