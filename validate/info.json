@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'validate' cog. Have fun! This cog will attempt to yaml-lint messages and attachments like a config.yml file",
+    "name" : "validate",
+    "short" : "This cog will attempt to yaml-lint messages and attachments like a config.yml file",
+    "requirements" : ["None"],
+    "description" : "This cog will attempt to yaml-lint messages and attachments like a config.yml file",
+    "permissions" : ["Not sure"],
+    "tags" : ["validate, embeds, auto-responder"]
+}
