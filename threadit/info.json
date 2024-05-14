@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'threadit' cog. Have fun! This cog works with the image-showcsse and config-showcase channels to ensure people post appropriately. If not, the message is moved and the user is notified.",
+    "name" : "threadit",
+    "short" : "This cog works with the image-showcsse and config-showcase channels to ensure people post appropriately. If not, the message is moved and the user is notified.",
+    "requirements" : ["None"],
+    "description" : "This cog works with the image-showcsse and config-showcase channels to ensure people post appropriately. If not, the message is moved and the user is notified.",
+    "permissions" : ["Not sure"],
+    "tags" : ["threadit, embeds, auto-responder"]
+}
