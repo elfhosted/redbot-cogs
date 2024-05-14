@@ -1,0 +1,10 @@
+{
+    "author" : ["Kometa-Team"],
+    "install_msg" : "You have just installed the 'redactor' cog. Have fun! This cog will attempt to auto-redact messages with sensitive information like a config.yml file",
+    "name" : "redactor",
+    "short" : "This cog will attempt to auto-redact messages with sensitive information like a config.yml file",
+    "requirements" : ["None"],
+    "description" : "This cog will attempt to auto-redact messages with sensitive information like a config.yml file",
+    "permissions" : ["Not sure"],
+    "tags" : ["redactor, embeds, auto-responder"]
+}
