@@ -26,6 +26,9 @@ class RedBotCogFun(commands.Cog):
             'ban': 'exact',
             'yolo': 'exact',
             'lmao': 'exact',
+            'ha': 'exact',
+            'haha': 'exact',
+            'hahaha': 'exact',
             'pmm': 'exact'
         }
 
@@ -124,6 +127,8 @@ class RedBotCogFun(commands.Cog):
             return "No regrets, right?"
         elif reaction_trigger == 'lmao':
             return ":rofl: lmao!!!"
+        elif reaction_trigger == 'ha' or reaction_trigger == 'haha' or reaction_trigger == 'hahaha':
+            return ":rofl: What's so funny?!?"
         elif reaction_trigger == 'pmm':
             return "Was that a slip? Did you know?\n\nhttps://discord.com/channels/822460010649878528/1230493777001582643/1230916021456474213\n\n"
         else:
