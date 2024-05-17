@@ -3,7 +3,7 @@ import io
 import re
 from discord import File
 from redbot.core import commands
-from redbot.core.commands import has_any_role
+from discord.ext.commands import has_any_role
 
 # Kometa-Masters 929900016531828797
 # Kometa-Apprentices 981499667722424390
@@ -59,3 +59,9 @@ class BotLogs(commands.Cog):
         
         # Send the message with the attachment
         await ctx.send(f"Ran: {command}\nHere are the last {num_lines} lines of the bot's log files (filtered):", file=file)
+
+    @commands.command()
+    async def myroles(self, ctx):
+        roles = [role.id for role in ctx.author.roles]
+        await ctx.send(f"Your roles: {roles}")
+        print(f"User {ctx.author} (ID: {ctx.author.id}) has roles: {roles}")
