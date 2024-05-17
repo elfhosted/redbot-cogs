@@ -6,6 +6,7 @@ from redbot.core import commands
 from discord.ext.commands import has_any_role
 
 # Kometa-Masters 929900016531828797
+# Moderators 929756550380286153
 # Kometa-Apprentices 981499667722424390
 
 class BotLogs(commands.Cog):
@@ -17,7 +18,7 @@ class BotLogs(commands.Cog):
     # @has_any_role(929900016531828797, 981499667722424390)  # Uncomment to use decorator
     async def botlogs(self, ctx, num_lines: int = 50):
         # Role IDs to check
-        allowed_roles = [929900016531828797, 981499667722424390]
+        allowed_roles = [929900016531828797, 981499667722424390, 929756550380286153]
         
         # Print out all the user's roles
         user_roles = [role.id for role in ctx.author.roles]
