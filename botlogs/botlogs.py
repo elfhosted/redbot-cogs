@@ -14,7 +14,7 @@ class BotLogs(commands.Cog):
         self.bot = bot
 
     @commands.command()
-    @has_any_role(929900016531828797, 981499667722424390)  # Replace with actual role IDs
+    # @has_any_role(929900016531828797, 981499667722424390)  # Replace with actual role IDs
     async def botlogs(self, ctx, num_lines: int = 50):
         # Debug prints
         print(f"User {ctx.author} (ID: {ctx.author.id}) is trying to access bot logs.")
