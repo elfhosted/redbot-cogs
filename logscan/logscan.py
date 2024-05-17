@@ -783,7 +783,7 @@ class RedBotCogLogscan(commands.Cog):
                 missing_path_errors.append(idx)
             elif "Newest Version: " in line:
                 new_version_found_errors.append(idx)
-            elif "PlexAPI Requires an Update to Version:" in line:
+            elif "requires an update to:" in line:
                 new_plexapi_version_found_errors.append(idx)
             elif "OMDb Error: Invalid API key" in line:
                 omdb_errors.append(idx)
@@ -1211,15 +1211,15 @@ class RedBotCogLogscan(commands.Cog):
             special_check_lines.append(missing_path_errors_message)
 
         if new_plexapi_version_found_errors:
-            url_line = "[https://kometa.wiki/en/latest/kometa/logs/?h=checking+plex+meta+manager+version#checking-plex-meta-manager-version]"
+            url_line = "[https://kometa.wiki/en/latest/kometa/logs/#checking-kometa-version]"
             formatted_errors = self.format_contiguous_lines(new_plexapi_version_found_errors)
             note = f"**(as of {datetime.now().strftime('%Y-%m-%d %H:%M:%S')})**"
             new_plexapi_version_found_errors_message = (
-                    "🚀 **PLEXAPI UPDATE AVAILABLE**\n"
+                    "🚀 **PYTHON MODULE UPDATE NEEDED**\n"
                     # f"PlexAPI: {self.current_plexapi_version}\n\n"
                     "In the Kometa discord thread, type `!update` for instructions on how to update your requirements.\n"
                     f"For more information on updating, {url_line}\n"
-                    f"{len(new_plexapi_version_found_errors)} line(s) with New PlexAPI Version errors. Line number(s): {formatted_errors}"
+                    f"{len(new_plexapi_version_found_errors)} line(s) with New Python Module Updates. Line number(s): {formatted_errors}"
             )
             special_check_lines.append(new_plexapi_version_found_errors_message)
 
