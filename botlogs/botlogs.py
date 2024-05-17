@@ -19,6 +19,10 @@ class BotLogs(commands.Cog):
         # Role IDs to check
         allowed_roles = [929900016531828797, 981499667722424390]
         
+        # Print out all the user's roles
+        user_roles = [role.id for role in ctx.author.roles]
+        print(f"User {ctx.author} (ID: {ctx.author.id}) has roles: {user_roles}")
+        
         # Check if user has one of the allowed roles
         has_role = any(role.id in allowed_roles for role in ctx.author.roles)
         if not has_role:
@@ -59,9 +63,3 @@ class BotLogs(commands.Cog):
         
         # Send the message with the attachment
         await ctx.send(f"Ran: {command}\nHere are the last {num_lines} lines of the bot's log files (filtered):", file=file)
-
-    @commands.command()
-    async def myroles(self, ctx):
-        roles = [role.id for role in ctx.author.roles]
-        await ctx.send(f"Your roles: {roles}")
-        print(f"User {ctx.author} (ID: {ctx.author.id}) has roles: {roles}")
