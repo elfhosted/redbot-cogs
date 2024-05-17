@@ -3,7 +3,7 @@ import io
 import re
 from discord import File
 from redbot.core import commands
-from discord.ext.commands import has_any_role
+from redbot.core.commands import has_any_role
 
 # Kometa-Masters 929900016531828797
 # Kometa-Apprentices 981499667722424390
@@ -12,19 +12,22 @@ class BotLogs(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.bot_name = bot.user.name
-        self.bot_uid = bot.user.id
 
     @commands.command()
-    # @has_any_role(929900016531828797, 981499667722424390)  # Replace with actual role IDs
+    @has_any_role(929900016531828797, 981499667722424390)  # Replace with actual role IDs
     async def botlogs(self, ctx, num_lines: int = 50):
+        # Debug prints
+        print(f"User {ctx.author} (ID: {ctx.author.id}) is trying to access bot logs.")
+        print(f"User's roles: {[role.id for role in ctx.author.roles]}")
+        
         # Constrain the number of lines between 1 and 10000
         num_lines = max(1, min(num_lines, 10000))
 
         # Determine the appropriate target channel ID based on bot user ID
-        if self.bot_uid == 1138446898487894206:  # Botmoose20
+        bot_uid = self.bot.user.id
+        if bot_uid == 1138446898487894206:  # Botmoose20
             service_name = 'botmoose@botmoose'
-        elif self.bot_uid == 1132406656785973418:  # Luma
+        elif bot_uid == 1132406656785973418:  # Luma
             service_name = 'luma@luma'
         else:
             await ctx.send("Unknown bot UID.")
@@ -47,4 +50,4 @@ class BotLogs(commands.Cog):
         file = File(fp=io.BytesIO(output_file.getvalue().encode()), filename="bot_logs.txt")
         
         # Send the message with the attachment
-        await ctx.send(f"Ran: {command}\nHere are the last {num_lines} lines of {self.bot_name}'s log files (filtered):", file=file)
+        await ctx.send(f"Ran: {command}\nHere are the last {num_lines} lines of the bot's log files (filtered):", file=file)
