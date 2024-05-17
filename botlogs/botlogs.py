@@ -3,6 +3,10 @@ import io
 import re
 from discord import File
 from redbot.core import commands
+from discord.ext.commands import has_any_role
+
+# Kometa-Masters 929900016531828797
+# Kometa-Apprentices 981499667722424390
 
 class BotLogs(commands.Cog):
 
@@ -12,6 +16,7 @@ class BotLogs(commands.Cog):
         self.bot_uid = bot.user.id
 
     @commands.command()
+    @has_any_role(929900016531828797, 981499667722424390)  # Replace with actual role IDs
     async def botlogs(self, ctx, num_lines: int = 50):
         # Constrain the number of lines between 1 and 10000
         num_lines = max(1, min(num_lines, 10000))
