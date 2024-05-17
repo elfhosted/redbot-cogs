@@ -14,11 +14,19 @@ class BotLogs(commands.Cog):
         self.bot = bot
 
     @commands.command()
-    # @has_any_role(929900016531828797, 981499667722424390)  # Replace with actual role IDs
+    # @has_any_role(929900016531828797, 981499667722424390)  # Uncomment to use decorator
     async def botlogs(self, ctx, num_lines: int = 50):
-        # Debug prints
-        print(f"User {ctx.author} (ID: {ctx.author.id}) is trying to access bot logs.")
-        print(f"User's roles: {[role.id for role in ctx.author.roles]}")
+        # Role IDs to check
+        allowed_roles = [929900016531828797, 981499667722424390]
+        
+        # Check if user has one of the allowed roles
+        has_role = any(role.id in allowed_roles for role in ctx.author.roles)
+        if not has_role:
+            await ctx.send("You do not have the required role to use this command.")
+            print(f"User {ctx.author} (ID: {ctx.author.id}) does NOT have the required role.")
+            return
+        else:
+            print(f"User {ctx.author} (ID: {ctx.author.id}) has the required role.")
         
         # Constrain the number of lines between 1 and 10000
         num_lines = max(1, min(num_lines, 10000))
