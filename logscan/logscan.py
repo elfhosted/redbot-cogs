@@ -2105,7 +2105,7 @@ class RedBotCogLogscan(commands.Cog):
             schema_url_line = f"# yaml-language-server: $schema={self.schema_url}"
 
             # Define the bot-related information line
-            added_by_bot_line = f"# ^^^ Added by bot: {self.bot.user} ^^^"
+            added_by_bot_line = f"# ^^^ Added by bot: {self.bot.user} ^^^. Here is your extracted config. Note that line numbers will have changed if we added the header."
 
             # Split the content into lines
             lines = config_content_str.split("\n")
