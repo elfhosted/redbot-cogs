@@ -93,7 +93,7 @@ class Threads(commands.Cog):
             # Check if the string is in the initial message content
             initial_message_content = str(thread)
             # Use regex to extract the username
-            match = re.search(r'(\w+) needs assistance\. Invoked by', initial_message_content)
+            match = re.search(r'(\w+) needs elf-ssistance\. Invoked by', initial_message_content)
             username = match.group(1) if match else "U_n_k_n_o_w_n"
 
             # Retrieve the Discord user object

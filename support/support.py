@@ -15,7 +15,7 @@ class RedBotCogSupport(commands.Cog):
         self.bot_name = bot.user.name
         self.bot_uid = bot.user.id
 
-    @commands.hybrid_command(name="elf-support")
+    @commands.hybrid_command(name="support")
     @app_commands.describe(message_link="The discord message link you want to create a new elf-support forum post.")
     async def support(self, ctx, message_link: discord.Message):
         try:
