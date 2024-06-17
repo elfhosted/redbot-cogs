@@ -2,7 +2,7 @@ import discord
 import logging
 from redbot.core import commands, app_commands
 
-ALLOWED_ROLE_IDS = [938443185347244033, 929756550380286153]
+ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
 
 # Create logger
 mylogger = logging.getLogger('test_support')
@@ -15,8 +15,8 @@ class RedBotCogSupport(commands.Cog):
         self.bot_name = bot.user.name
         self.bot_uid = bot.user.id
 
-    @commands.hybrid_command(name="kometa-help")
-    @app_commands.describe(message_link="The discord message link you want to create a new kometa-help forum post.")
+    @commands.hybrid_command(name="elf-support")
+    @app_commands.describe(message_link="The discord message link you want to create a new elf-support forum post.")
     async def support(self, ctx, message_link: discord.Message):
         try:
             # Check if the linked message is associated with a guild
@@ -66,10 +66,10 @@ class RedBotCogSupport(commands.Cog):
 
                 # Determine the appropriate forum channel ID based on bot user ID
                 forum_channel_id = None
-                if self.bot_uid == 1138446898487894206:  # Botmoose20
-                    forum_channel_id = 1138466814519693412  # #bot-forums
-                elif self.bot_uid == 1132406656785973418:  # Luma
-                    forum_channel_id = 1006644783743258635  # #kometa-help
+                if self.bot_uid == 1250781032756674641:     # Sparky
+                    forum_channel_id = 1252251752397537291  # #test-elf-support
+                elif self.bot_uid == 1250431337156837428:   # Spanky
+                    forum_channel_id = 1245513340176961606  # #elf-support
 
                 # Get the forum channel
                 forum_channel = self.bot.get_channel(forum_channel_id)
@@ -77,7 +77,7 @@ class RedBotCogSupport(commands.Cog):
                     return await ctx.send(f'Could not find a channel with ID {forum_channel_id}.')
 
                 # Construct subject and description with author's display name (nickname)
-                subject = f"{author_display_name} ({message_link.author.name}) needs assistance. Invoked by {invoker_display_name}"
+                subject = f"{author_display_name} ({message_link.author.name}) needs elf-ssistence. Invoked by {invoker_display_name}"
 
                 description = f"**{author_display_name}**, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 

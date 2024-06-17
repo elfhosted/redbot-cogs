@@ -4,27 +4,9 @@ import re
 import logging
 from redbot.core import commands, app_commands
 
-# 862041125706268702  Sponsor
-# 938443185347244033  Support
-# 1097919568334311495 Priority Support
-# 822460010649878531 #general-chat
-# 1006644783743258635 #kometa-help
-
-# 1232124371901087764 Test Sponsor
-# 1232122972521762836 Test Support
-# 1232121280971407362 Test Priority Support
-# 1138466667165405244 #bot-chat
-# 1138466814519693412 #bot-forums
-
-# 938492411649339462 - Docker
-# 938490334286082068 - Linux
-# 938490571637555220 - Mac
-# 938490657717252148 - NAS
-# 938490888437502053 - Windows
-# 938490820129079296 - Unraid
-# 938492563596406876 - Master Build
-# 938492604989968454 - Develop Build
-# 952912471226716192 - Nightly Build
+# 1198381095553617922 # ElfVengers
+# 1118645576884572303 # elf-friends
+# 1245513340176961606 # elf-support
 
 # Create logger
 mylogger = logging.getLogger('threads')
@@ -67,18 +49,18 @@ class Threads(commands.Cog):
         self.general_chat = None
         self.parent_channel_id = None
 
-        if self.bot.user.id == 1138446898487894206:  # Botmoose20
+        if self.bot.user.id == 1250781032756674641:  # Sparky
             self.role1 = 1232121280971407362  # Test Priority Support
-            self.role2 = 1232122972521762836  # Test Support
+            self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 1138466667165405244  # #bot-chat
-            self.parent_channel_id = 1138466814519693412  # #bot-forums
-        elif self.bot.user.id == 1132406656785973418:  # Luma
-            self.role1 = 1097919568334311495  # Priority Support
-            self.role2 = 938443185347244033  # Support
-            self.sponsor = 862041125706268702  # Sponsor
-            self.general_chat = 822460010649878531  # #general-chat
-            self.parent_channel_id = 1006644783743258635  # #kometa-help
+            self.general_chat = 720087030750773332  # #general
+            self.parent_channel_id = 1252251752397537291  # #test-elf-support
+        elif self.bot.user.id == 1250431337156837428:  # Spanky
+            self.role1 = 1097919568334311495  # Priority Support - not used
+            self.role2 = 1198381095553617922  # ElfVenger
+            self.sponsor = 862041125706268702  # Sponsor - not used
+            self.general_chat = 1118645576884572303  # #elf-friends
+            self.parent_channel_id = 1245513340176961606  # #elf-support
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
@@ -89,16 +71,16 @@ class Threads(commands.Cog):
         
         mylogger.info(f"Threads invoked by {author_name} in {guild_name}/{channel_name} (ID: {thread.guild.id if thread.guild else 'N/A'}/{thread.parent.id if thread.parent else 'N/A'})")
         # mylogger.info(f"Processing message: {thread.id}")
-        role1 = thread.guild.get_role(self.role1)
-        role2 = thread.guild.get_role(self.role2)
+        # role1 = thread.guild.get_role(self.role1)
+        # role2 = thread.guild.get_role(self.role2)
 
-        if not (role1):
-            mylogger.error(f"role1: {self.role1} is missing. Someone may have removed the Test Priority Support role. Aborting now...")
-            return
+        # if not (role1):
+        #     mylogger.error(f"role1: {self.role1} is missing. Someone may have removed the Test Priority Support role. Aborting now...")
+        #     return
 
-        if not (role2):
-            mylogger.error(f"role2: {self.role2} is missing. Someone may have removed the Test Support role. Aborting now...")
-            return
+        # if not (role2):
+        #     mylogger.error(f"role2: {self.role2} is missing. Someone may have removed the Test Support role. Aborting now...")
+        #     return
         
         # Determine the appropriate bot role based on the bot running
         bot_role = role2
@@ -142,7 +124,7 @@ class Threads(commands.Cog):
                                  938490888437502053, 938490657717252148, 938490571637555220, 938490334286082068,
                                  938492411649339462] for role in user_roles):
                 await thread.send(
-                    f"{initial_mention}Someone from <@&{self.role2}> will assist when they're available.\n\nIncluding `meta.log` from the beginning is a huge help. Type `!logs` for more information.\n\nAfter attaching your log, do not forget to hit the green check boxes when prompted by our bot.\n\n",
+                    f"{initial_mention}An <@&{self.role2}> will assist when they're available.\n\n",
                     allowed_mentions=discord.AllowedMentions(roles=[role1, role2]), view=Buttons(self, bot_role, user_id))
             else:
                 await thread.send(
@@ -165,7 +147,7 @@ class Threads(commands.Cog):
             mylogger.info(f"initial_message_content: {initial_message_content}")
 
             # Use regex to search for the line and extract the text before the comma
-            match = re.search(r'(.*?) needs assistance\. Invoked by ', initial_message_content)
+            match = re.search(r'(.*?) needs elf-ssistance\. Invoked by ', initial_message_content)
             if match:
                 user_that_needed_help = match.group(1)
             else:
@@ -200,8 +182,7 @@ class Threads(commands.Cog):
                     try:
                         await interaction.response.send_message(
                             f"This post has been marked as Resolved and has now been closed."
-                            f"\n\nYou cannot reopen this thread - you must create a new one or ask a member of staff to reopen it in <#{self.general_chat}>."
-                            f"\n\nThanks for using Kometa.",
+                            f"\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
                             ephemeral=False)
                         tags = []
                         for tag in channel.parent.available_tags:
