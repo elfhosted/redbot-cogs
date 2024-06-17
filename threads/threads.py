@@ -70,9 +70,9 @@ class Threads(commands.Cog):
         channel_name = thread.parent.name if isinstance(thread.parent, discord.TextChannel) else "Direct Message"
         
         mylogger.info(f"Threads invoked by {author_name} in {guild_name}/{channel_name} (ID: {thread.guild.id if thread.guild else 'N/A'}/{thread.parent.id if thread.parent else 'N/A'})")
-        # mylogger.info(f"Processing message: {thread.id}")
+        mylogger.info(f"Processing message: {thread.id}")
         # role1 = thread.guild.get_role(self.role1)
-        # role2 = thread.guild.get_role(self.role2)
+        role2 = thread.guild.get_role(self.role2)
 
         # if not (role1):
         #     mylogger.error(f"role1: {self.role1} is missing. Someone may have removed the Test Priority Support role. Aborting now...")
