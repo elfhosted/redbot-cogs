@@ -77,8 +77,8 @@ class RedBotCogSupport(commands.Cog):
                     return await ctx.send(f'Could not find a channel with ID {forum_channel_id}.')
 
                 # Construct subject and description with author's display name (nickname)
-                # subject = f"{author_display_name} ({message_link.author.name}) needs elf-ssistence. Invoked by {invoker_display_name}"
-                subject = "batman"
+                subject = f"{author_display_name} ({message_link.author.name}) needs elf-ssistence. Invoked by {invoker_display_name}"
+                # subject = "batman"
                 description = f"**{author_display_name}**, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
                 # Create a thread in the forum channel
