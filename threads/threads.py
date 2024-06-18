@@ -50,13 +50,13 @@ class Threads(commands.Cog):
         self.parent_channel_id = None
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
-            self.role1 = 1232121280971407362  # Test Priority Support
+            self.role1 = 1252252269790105721  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
             self.general_chat = 720087030750773332  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
         elif self.bot.user.id == 1250431337156837428:  # Spanky
-            self.role1 = 1097919568334311495  # Priority Support - not used
+            self.role1 = 1198381095553617922  # Priority Support - not used
             self.role2 = 1198381095553617922  # ElfVenger
             self.sponsor = 862041125706268702  # Sponsor - not used
             self.general_chat = 1118645576884572303  # #elf-friends
@@ -71,16 +71,16 @@ class Threads(commands.Cog):
         
         mylogger.info(f"Threads invoked by {author_name} in {guild_name}/{channel_name} (ID: {thread.guild.id if thread.guild else 'N/A'}/{thread.parent.id if thread.parent else 'N/A'})")
         mylogger.info(f"Processing message: {thread.id}")
-        # role1 = thread.guild.get_role(self.role1)
+        role1 = thread.guild.get_role(self.role1)
         role2 = thread.guild.get_role(self.role2)
 
-        # if not (role1):
-        #     mylogger.error(f"role1: {self.role1} is missing. Someone may have removed the Test Priority Support role. Aborting now...")
-        #     return
+        if not (role1):
+            mylogger.error(f"role1: {self.role1} is missing. Someone may have removed the Test Priority Support role. Aborting now...")
+            return
 
-        # if not (role2):
-        #     mylogger.error(f"role2: {self.role2} is missing. Someone may have removed the Test Support role. Aborting now...")
-        #     return
+        if not (role2):
+            mylogger.error(f"role2: {self.role2} is missing. Someone may have removed the Test Support role. Aborting now...")
+            return
         
         # Determine the appropriate bot role based on the bot running
         bot_role = role2
