@@ -59,10 +59,10 @@ class RedBotCogSupport(commands.Cog):
 
             if isinstance(message_link.author, discord.Member) and message_link.guild:
                 # Retrieve the display name (nickname) of the message author within the guild
-                author_display_name = message_link.author.display_name
+                author_display_name = message_link.author.nick
                 
                 # Send an acknowledgment message
-                await ctx.send("Processing your request, [{author_display_name}]...")
+                await ctx.send("Processing your request...")
 
                 # Determine the appropriate forum channel ID based on bot user ID
                 forum_channel_id = None
