@@ -39,7 +39,6 @@ class RedBotCogSupport(commands.Cog):
             
             # Log the invoker and their roles for troubleshooting
             invoker_display_name = ctx.author.display_name
-            invoker_id = ctx.author.id
             invoker_username = ctx.author.name
             mylogger.info(f"Invoker: {invoker_display_name} ({invoker_username}), Roles: {ctx.author.roles}")
             mylogger.info(f"message_link.author: {message_link.author}")
@@ -60,7 +59,7 @@ class RedBotCogSupport(commands.Cog):
 
             if isinstance(message_link.author, discord.Member) and message_link.guild:
                 # Retrieve the display name (nickname) of the message author within the guild
-                author_name = message_link.author.name
+                author_display_name = message_link.author.display_name
                 
                 # Send an acknowledgment message
                 await ctx.send("Processing your request...")
@@ -78,16 +77,15 @@ class RedBotCogSupport(commands.Cog):
                     return await ctx.send(f'Could not find a channel with ID {forum_channel_id}.')
 
                 # Construct subject and description with author's display name (nickname)
-                subject = f"{message_link.author.name} needs elf-ssistence. Invoked by {invoker_id}"
-
-                description = f"{message_link.author.id}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
+                subject = f"{author_display_name} ({message_link.author.name}) needs elf-ssistence. Invoked by {invoker_display_name}"
+                description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
                 # Create a thread in the forum channel
                 thread, message = await forum_channel.create_thread(name=f"{subject}", content=f"{description}", files=[await a.to_file() for a in message_link.attachments])
 
                 # Delete the original message and leave a trace
                 await message_link.delete()
-                trace_message = await ctx.send(f"A message by {message_link.author.id} was moved to {message.jump_url} by {invoker_id}")
+                trace_message = await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
 
