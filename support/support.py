@@ -62,7 +62,7 @@ class RedBotCogSupport(commands.Cog):
                 author_display_name = message_link.author.display_name
                 
                 # Send an acknowledgment message
-                await ctx.send("Processing your request...")
+                await ctx.send("Processing your request, [{author_display_name}]...")
 
                 # Determine the appropriate forum channel ID based on bot user ID
                 forum_channel_id = None
