@@ -59,7 +59,7 @@ class RedBotCogSupport(commands.Cog):
 
             if isinstance(message_link.author, discord.Member) and message_link.guild:
                 # Retrieve the display name (nickname) of the message author within the guild
-                author_display_name = message_link.author.nick
+                author_display_name = message_link.author.display_name
                 
                 # Send an acknowledgment message
                 await ctx.send("Processing your request...")

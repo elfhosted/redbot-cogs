@@ -114,22 +114,9 @@ class Threads(commands.Cog):
                     tags.append(tag)
                     await thread.edit(applied_tags=tags)
 
-            if any(role.id == self.sponsor for role in user_roles):
-                await thread.send(
-                    f"{initial_mention}Thanks for being a Kometa Sponsor, we greatly appreciate it! Your ticket will now be diverted to <@&{self.role1}> and <@&{self.role2}>.\n\nIncluding `meta.log` from the beginning is a huge help. Type `!logs` for more information.\n\nAfter attaching your log, do not forget to hit the green check boxes when prompted by our bot.\n\n",
-                    allowed_mentions=discord.AllowedMentions(roles=[role for role in [role1, role2] if role]),
-                    view=Buttons(self, bot_role, user_id))
-            # See top for roles
-            elif any(role.id in [952912471226716192, 938492604989968454, 938492563596406876, 938490820129079296,
-                                 938490888437502053, 938490657717252148, 938490571637555220, 938490334286082068,
-                                 938492411649339462] for role in user_roles):
-                await thread.send(
-                    f"{initial_mention}An <@&{self.role2}> will assist when they're available.\n\n",
-                    allowed_mentions=discord.AllowedMentions(roles=[role1, role2]), view=Buttons(self, bot_role, user_id))
-            else:
-                await thread.send(
-                    f"{initial_mention}It looks like you have not yet completed the <id:customize> section of our Discord server, this will allow us to help you quicker.\n\nSomeone from <@&{self.role2}> will assist when they're available.\n\nIncluding `meta.log` from the beginning is a huge help. Type `!logs` for more information.\n\nAfter attaching your log, do not forget to hit the green check boxes when prompted by our bot.\n\n",
-                    allowed_mentions=discord.AllowedMentions(roles=[role1, role2]), view=Buttons(self, bot_role, user_id))
+            await thread.send(
+                f"{initial_mention}This thread is primarily for community support from your fellow elvese, but The <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you're reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `!troubleshoot` for details.",
+                allowed_mentions=discord.AllowedMentions(roles=[role1, role2]), view=Buttons(self, bot_role, user_id))
             message = await thread.send(
                 "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
             await message.pin(reason="Makes it easier to close the post.")
@@ -188,9 +175,9 @@ class Threads(commands.Cog):
                         for tag in channel.parent.available_tags:
                             if tag.name.lower() == "closed":
                                 tags.append(tag)
-                            if tag.name.lower() == "sohjiro to review" and tag in tags:
+                            if tag.name.lower() == "funkypenguin to review" and tag in tags:
                                 tags.remove(tag)
-                            if tag.name.lower() == "staff to review" and tag in tags:
+                            if tag.name.lower() == "elfvengers to review" and tag in tags:
                                 tags.remove(tag)
                         await channel.edit(
                             locked=True,
