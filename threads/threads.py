@@ -116,7 +116,7 @@ class Threads(commands.Cog):
                     await thread.edit(applied_tags=tags)
 
             await thread.send(
-                f"{initial_mention}This thread is primarily for community support from your fellow elvese, but The <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you're reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `!troubleshoot` for details.",
+                f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you're reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `!troubleshoot` for details.",
                 allowed_mentions=discord.AllowedMentions(roles=[role1, role2]), view=Buttons(self, bot_role, user_id))
             message = await thread.send(
                 "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
