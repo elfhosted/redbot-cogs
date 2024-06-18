@@ -175,9 +175,7 @@ class Threads(commands.Cog):
                         for tag in channel.parent.available_tags:
                             if tag.name.lower() == "closed":
                                 tags.append(tag)
-                            if tag.name.lower() == "funkypenguin to review" and tag in tags:
-                                tags.remove(tag)
-                            if tag.name.lower() == "elfvengers to review" and tag in tags:
+                            if tag.name.lower() == "review" and tag in tags:
                                 tags.remove(tag)
                         await channel.edit(
                             locked=True,
