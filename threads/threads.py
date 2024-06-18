@@ -50,7 +50,7 @@ class Threads(commands.Cog):
         self.parent_channel_id = None
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
-            self.role1 = 1252252269790105721  # Test Priority Support
+            self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
             self.general_chat = 720087030750773332  # #general
