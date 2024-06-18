@@ -5,6 +5,7 @@ import logging
 from redbot.core import commands, app_commands
 
 # 1198381095553617922 # ElfVengers
+# 1198385945049825322 # Elf-trainees
 # 1118645576884572303 # elf-friends
 # 1245513340176961606 # elf-support
 
@@ -56,7 +57,7 @@ class Threads(commands.Cog):
             self.general_chat = 720087030750773332  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
         elif self.bot.user.id == 1250431337156837428:  # Spanky
-            self.role1 = 1198381095553617922  # Priority Support - not used
+            self.role1 = 1198385945049825322  # Elf Trainees
             self.role2 = 1198381095553617922  # ElfVenger
             self.sponsor = 862041125706268702  # Sponsor - not used
             self.general_chat = 1118645576884572303  # #elf-friends
