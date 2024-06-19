@@ -20,8 +20,8 @@ class Buttons(discord.ui.View):
         thread = interaction.channel
         if thread and isinstance(thread, discord.Thread):
             member = interaction.guild.get_member(interaction.user.id)
-            mylogger.info(f"User roles: {[role.id for role in member.roles]}")
-            mylogger.info(f"Bot role: {self.bot_role.id}")
+            mylogger.info(f"Close button pressed by {interaction.user.name} (ID: {interaction.user.id}) with roles: {[role.id for role in member.roles]}")
+            mylogger.info(f"Required bot role ID: {self.bot_role.id}")
             if interaction.user.id == self.user_id or self.bot_role in member.roles:
                 await self.cog._close(interaction)
             else:
@@ -169,6 +169,7 @@ class Threads(commands.Cog):
                     return
 
                 if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.role2 in member.roles:
+                    mylogger.info(f"User {member.name} has permissions to close the thread directly.")
                     try:
                         await interaction.response.send_message(
                             f"This post has been marked as Resolved and has now been closed."
@@ -261,10 +262,11 @@ class Threads(commands.Cog):
 
             await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>")
 
-            await thread.edit(locked=True, archived=True)
             try:
                 await interaction.followup.send(f"The thread has been moved to a private channel: {new_thread_message.jump_url}", ephemeral=True)
             except discord.NotFound:
                 pass
+
+            await thread.edit(locked=True, archived=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
