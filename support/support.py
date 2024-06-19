@@ -12,7 +12,7 @@ class RedBotCogSupport(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.bot_name = bot.user.name
-        self.bot_uid = bot.user.id
+        self.bot_uid = self.bot.user.id
 
     @commands.hybrid_command(name="support")
     @app_commands.describe(message_link="The discord message link or ID you want to create a new elf-support forum post.")
@@ -80,9 +80,11 @@ class RedBotCogSupport(commands.Cog):
                     for attachment in message_link.attachments:
                         await thread.send(file=await attachment.to_file())
 
-                await message_link.author.send(f"A new support thread has been created for your message: {thread.jump_url}")
+                thread_url = f"https://discord.com/channels/{ctx.guild.id}/{thread.id}"
+
+                await message_link.author.send(f"A new support thread has been created for your message: {thread_url}")
                 await message_link.delete()
-                trace_message = await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {thread.jump_url} by {invoker_display_name}")
+                await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {thread_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
 

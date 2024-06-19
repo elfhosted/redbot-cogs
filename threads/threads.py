@@ -255,7 +255,7 @@ class Threads(commands.Cog):
 
             new_thread = await private_channel.create_thread(name=thread.name)
 
-            await new_thread.send(f"Private thread created for {user.mention}\n\nHere is the original thread: {thread.jump_url}")
+            await new_thread.send(f"Private thread created for {user.mention}\n\nHere is the original thread: https://discord.com/channels/{interaction.guild.id}/{thread.id}")
 
             async for message in thread.history(oldest_first=True):
                 if message.content.startswith("Content: "):
@@ -264,7 +264,7 @@ class Threads(commands.Cog):
             else:
                 original_content = "No original content found."
 
-            await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention}")
+            await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>")
 
             await thread.edit(locked=True, archived=True)
-            await interaction.response.send_message(f"The thread has been moved to a private channel: {new_thread.jump_url}", ephemeral=True)
+            await interaction.followup.send(f"The thread has been moved to a private channel: https://discord.com/channels/{interaction.guild.id}/{new_thread.id}", ephemeral=True)
