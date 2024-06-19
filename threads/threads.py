@@ -224,7 +224,6 @@ class Threads(commands.Cog):
                 await interaction.response.send_message(
                     f"You don't have permission to use this command.", ephemeral=True)
 
-
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
         role2 = interaction.guild.get_role(self.role2)
@@ -249,11 +248,7 @@ class Threads(commands.Cog):
 
             new_thread_name = f"{author_name} - Private Support"
             new_thread = await private_channel.create_thread(name=new_thread_name)
-
-            thread_url = f"https://discord.com/channels/{thread.guild.id}/{thread.id}"
-            new_thread_url = f"https://discord.com/channels/{new_thread.guild.id}/{new_thread.id}"
-
-            await new_thread.send(f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: {thread_url}")
+            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: {thread.jump_url}")
 
             original_content = "No original content found."
             async for message in thread.history(oldest_first=True):
@@ -265,7 +260,6 @@ class Threads(commands.Cog):
 
             await thread.edit(locked=True, archived=True)
             try:
-                await interaction.followup.send(f"The thread has been moved to a private channel: {new_thread_url}", ephemeral=True)
+                await interaction.followup.send(f"The thread has been moved to a private channel: {new_thread_message.jump_url}", ephemeral=True)
             except discord.NotFound:
                 pass
-
