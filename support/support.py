@@ -89,7 +89,6 @@ class RedBotCogSupport(commands.Cog):
 
                 thread, message = await forum_channel.create_thread(name=subject, content=description, files=[await a.to_file() for a in message_link.attachments])
 
-                await message_link.delete()
                 await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
