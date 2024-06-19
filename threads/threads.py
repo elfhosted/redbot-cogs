@@ -23,7 +23,7 @@ class Buttons(discord.ui.View):
             mylogger.info(f"Close button pressed by {interaction.user.name} (ID: {interaction.user.id}) with roles: {[role.id for role in member.roles]}")
             mylogger.info(f"Required bot role ID: {self.bot_role}")
             if interaction.user.id == self.user_id or self.bot_role in [role.id for role in member.roles]:
-                await self.cog._close(interaction)
+                await self.cog._handle_close(interaction)
             else:
                 await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
 
@@ -121,7 +121,7 @@ class Threads(commands.Cog):
             except discord.Forbidden:
                 mylogger.error("Missing permissions to pin messages.")
 
-    @commands.hybrid_command(name="close")
+    @commands.hybrid_command(name="close", with_app_command=False)
     async def hybrid_close(self, ctx):
         """Close the current thread."""
         await self._handle_close(ctx)
