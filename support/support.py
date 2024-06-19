@@ -80,7 +80,7 @@ class RedBotCogSupport(commands.Cog):
                     for attachment in message_link.attachments:
                         await thread.send(file=await attachment.to_file())
 
-                first_message = await thread.history(oldest_first=True).flatten()[0]
+                first_message = await thread.fetch_message(thread.id)
 
                 await message_link.author.send(f"A new support thread has been created for your message: {first_message.jump_url}")
                 await message_link.delete()
