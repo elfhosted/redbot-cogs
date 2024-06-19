@@ -113,7 +113,7 @@ class Threads(commands.Cog):
 
             await thread.send(
                 f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
-                allowed_mentions=discord.AllowedMentions(roles=[role1, role2]), view=Buttons(self, bot_role, user_id))
+                allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user]), view=Buttons(self, bot_role, user_id))
             message = await thread.send(
                 "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
             try:
@@ -123,7 +123,8 @@ class Threads(commands.Cog):
 
     @app_commands.command()
     async def close(self, interaction: discord.Interaction):
-        if self.role2 not in interaction.user.roles:
+        role2 = interaction.guild.get_role(self.role2)
+        if role2 not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
         await self._close(interaction)
@@ -233,7 +234,8 @@ class Threads(commands.Cog):
 
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
-        if self.role2 not in interaction.user.roles:
+        role2 = interaction.guild.get_role(self.role2)
+        if role2 not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
 
