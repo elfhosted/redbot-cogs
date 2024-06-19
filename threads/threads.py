@@ -173,12 +173,7 @@ class Threads(commands.Cog):
                             f"This post has been marked as Resolved and has now been closed."
                             f"\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
                             ephemeral=False)
-                        tags = []
-                        for tag in channel.parent.available_tags:
-                            if tag.name.lower() == "closed":
-                                tags.append(tag)
-                            if tag.name.lower() == "review" and tag in tags:
-                                tags.remove(tag)
+                        tags = [tag for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
                         await channel.edit(
                             locked=True,
                             archived=True,
@@ -208,10 +203,7 @@ class Threads(commands.Cog):
                 return
             if member.guild_permissions.manage_threads or self.role2 in member.roles:
                 try:
-                    tags = []
-                    for tag in forum_channel.available_tags:
-                        if tag.name.lower() == "closed":
-                            tags.append(tag)
+                    tags = [tag for tag in forum_channel.available_tags if tag.name.lower() == "closed"]
                     await forum_channel.edit(
                         locked=True,
                         archived=True,
@@ -232,6 +224,7 @@ class Threads(commands.Cog):
                 await interaction.response.send_message(
                     f"You don't have permission to use this command.", ephemeral=True)
 
+
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
         role2 = interaction.guild.get_role(self.role2)
@@ -244,7 +237,8 @@ class Threads(commands.Cog):
     async def _make_private(self, interaction):
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
-            author_name = re.search(r'\(([^)]+)\)', thread.name).group(1)
+            match = re.search(r'\(([^)]+)\)', thread.name)
+            author_name = match.group(1) if match else "Unknown"
             user = discord.utils.get(thread.guild.members, name=author_name)
             role2 = thread.guild.get_role(self.role2)
 
@@ -256,19 +250,22 @@ class Threads(commands.Cog):
             new_thread_name = f"{author_name} - Private Support"
             new_thread = await private_channel.create_thread(name=new_thread_name)
 
-            await new_thread.send(f"Private thread created for {user.mention}\n\nHere is the original thread: {thread.jump_url}")
+            thread_url = f"https://discord.com/channels/{thread.guild.id}/{thread.id}"
+            new_thread_url = f"https://discord.com/channels/{new_thread.guild.id}/{new_thread.id}"
 
+            await new_thread.send(f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: {thread_url}")
+
+            original_content = "No original content found."
             async for message in thread.history(oldest_first=True):
                 if message.content.startswith("Content: "):
                     original_content = message.content[len("Content: "):]
                     break
-            else:
-                original_content = "No original content found."
 
             await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>")
 
             await thread.edit(locked=True, archived=True)
             try:
-                await interaction.followup.send(f"The thread has been moved to a private channel: {new_thread.jump_url}", ephemeral=True)
+                await interaction.followup.send(f"The thread has been moved to a private channel: {new_thread_url}", ephemeral=True)
             except discord.NotFound:
                 pass
+
