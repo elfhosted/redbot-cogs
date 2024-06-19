@@ -267,4 +267,7 @@ class Threads(commands.Cog):
             await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>")
 
             await thread.edit(locked=True, archived=True)
-            await interaction.followup.send(f"The thread has been moved to a private channel: https://discord.com/channels/{interaction.guild.id}/{new_thread.id}", ephemeral=True)
+            try:
+                await interaction.followup.send(f"The thread has been moved to a private channel: https://discord.com/channels/{interaction.guild.id}/{new_thread.id}", ephemeral=True)
+            except discord.NotFound:
+                pass
