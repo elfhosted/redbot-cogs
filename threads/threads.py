@@ -163,6 +163,8 @@ class Threads(commands.Cog):
                 member = interaction.guild.get_member(interaction.user.id)
                 mylogger.info(f"member.id: {member.id}")
                 mylogger.info(f"member.guild_permissions.manage_threads: {member.guild_permissions.manage_threads}")
+                mylogger.info(f"Member roles: {[role.id for role in member.roles]}")
+                mylogger.info(f"Role2 ID: {self.role2}")
                 if member is None:
                     await interaction.response.send_message(
                         f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
