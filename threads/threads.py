@@ -4,9 +4,8 @@ import re
 import logging
 from redbot.core import commands, app_commands
 
-# Create logger
 mylogger = logging.getLogger('threads')
-mylogger.setLevel(logging.DEBUG)  # Set the logging level to DEBUG
+mylogger.setLevel(logging.DEBUG)
 
 class Buttons(discord.ui.View):
     def __init__(self, cog, bot_role, user_id, *, timeout=None):
@@ -20,7 +19,6 @@ class Buttons(discord.ui.View):
     async def gray_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
         thread = interaction.channel
         if thread and isinstance(thread, discord.Thread):
-            # Check if the interaction user is the thread owner or has the appropriate bot role
             member = interaction.guild.get_member(interaction.user.id)
             mylogger.info(f"User roles: {[role.id for role in member.roles]}")
             mylogger.info(f"Bot role: {self.bot_role.id}")
@@ -28,7 +26,6 @@ class Buttons(discord.ui.View):
                 await self.cog._close(interaction)
             else:
                 await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
-
 
 class Threads(commands.Cog):
     def __init__(self, bot):
@@ -43,7 +40,7 @@ class Threads(commands.Cog):
         self.sponsor = None
         self.general_chat = None
         self.parent_channel_id = None
-        self.private_channel_id = None  # Replace with your private channel ID
+        self.private_channel_id = None
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
             self.role1 = 1252431218025431041  # Test Priority Support
@@ -69,7 +66,6 @@ class Threads(commands.Cog):
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
-        # Log command invocation details
         author_name = f"{thread.owner.name}#{thread.owner.discriminator}" if thread.owner else "Unknown"
         guild_name = thread.guild.name if thread.guild else "Direct Message"
         channel_name = thread.parent.name if isinstance(thread.parent, discord.TextChannel) else "Direct Message"
@@ -87,7 +83,6 @@ class Threads(commands.Cog):
             mylogger.error(f"role2: {self.role2} is missing. Someone may have removed the Test Support role. Aborting now...")
             return
         
-        # Determine the appropriate bot role based on the bot running
         bot_role = role2
 
         if thread.parent_id == self.parent_channel_id:
@@ -95,13 +90,10 @@ class Threads(commands.Cog):
             thread_owner = thread.owner
             tags = []
 
-            # Check if the string is in the initial message content
             initial_message_content = str(thread)
-            # Use regex to extract the username
             match = re.search(r'(\w+) needs elf-ssistance\. Invoked by', initial_message_content)
             username = match.group(1) if match else "U_n_k_n_o_w_n"
 
-            # Retrieve the Discord user object
             user = discord.utils.get(thread.guild.members, name=username)
 
             initial_mention = None
@@ -128,6 +120,9 @@ class Threads(commands.Cog):
 
     @app_commands.command()
     async def close(self, interaction: discord.Interaction):
+        if self.role2 not in interaction.user.roles:
+            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+            return
         await self._close(interaction)
 
     async def _close(self, interaction):
@@ -138,16 +133,14 @@ class Threads(commands.Cog):
 
             mylogger.info(f"initial_message_content: {initial_message_content}")
 
-            # Use regex to search for the line and extract the text before the comma
             match = re.search(r'(.*?) needs elf-ssistance\. Invoked by ', initial_message_content)
             if match:
                 user_that_needed_help = match.group(1)
             else:
-                user_that_needed_help = None  # Set it to None if the line isn't found
+                user_that_needed_help = None
 
-            user_that_needed_help_id = None  # Initialize the user ID as None
+            user_that_needed_help_id = None
 
-            # Retrieve the Discord user object by name
             if user_that_needed_help and user_that_needed_help != "U_n_k_n_o_w_n":
                 user_obj = discord.utils.get(channel.guild.members, name=user_that_needed_help)
                 if user_obj:
@@ -202,12 +195,42 @@ class Threads(commands.Cog):
                         f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread.")
             else:
                 await interaction.response.send_message(f"This command can only be used in a thread.", ephemeral=True)
+        elif isinstance(interaction.channel, discord.ForumChannel):
+            forum_channel = interaction.channel
+            member = interaction.guild.get_member(interaction.user.id)
+            if member is None:
+                await interaction.response.send_message(
+                    f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
+                return
+            if member.guild_permissions.manage_threads or self.role2 in member.roles:
+                try:
+                    tags = []
+                    for tag in forum_channel.available_tags:
+                        if tag.name.lower() == "closed":
+                            tags.append(tag)
+                    await forum_channel.edit(
+                        locked=True,
+                        archived=True,
+                        applied_tags=tags
+                    )
+                    await interaction.response.send_message(
+                        f"This post has been marked as Resolved and has now been closed.", ephemeral=False)
+                except Exception as e:
+                    await interaction.response.send_message(
+                        f"An unexpected error occurred. Please try again later. {e}", ephemeral=True)
+                except discord.Forbidden:
+                    await interaction.response.send_message(
+                        f"I don't have the necessary permissions to close and lock the thread.", ephemeral=True)
+                except discord.HTTPException:
+                    await interaction.response.send_message(
+                        f"An error occurred while attempting to close and lock the thread.", ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    f"You don't have permission to use this command.", ephemeral=True)
 
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
-        # Check if the user has the role to make the thread private
-        role2 = interaction.guild.get_role(self.role2)
-        if role2 not in interaction.user.roles:
+        if self.role2 not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
 
@@ -216,26 +239,27 @@ class Threads(commands.Cog):
     async def _make_private(self, interaction):
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
-            author_name = re.search(r'\(([^)]+)\)', thread.name).group(1)  # Extract the username from the thread name
+            author_name = re.search(r'\(([^)]+)\)', thread.name).group(1)
             user = discord.utils.get(thread.guild.members, name=author_name)
             role2 = thread.guild.get_role(self.role2)
 
-            # Create a new private thread in the private channel
             private_channel = self.bot.get_channel(self.private_channel_id)
             if not private_channel:
                 await interaction.response.send_message("Could not find the private channel.", ephemeral=True)
                 return
 
-            # Create a new thread in the private channel
             new_thread = await private_channel.create_thread(name=thread.name)
 
-            # Mention the user and role2 in the new private thread
-            await new_thread.send(f"Private thread created for {user.mention} by {interaction.user.mention}. Here is the original thread: {thread.jump_url}")
+            await new_thread.send(f"Private thread created for {user.mention}\n\nHere is the original thread: {thread.jump_url}")
 
-            # Send the opening message
-            opening_message = await thread.history(oldest_first=True).flatten()[0]
-            await new_thread.send(content=opening_message.content, files=[await attachment.to_file() for attachment in opening_message.attachments])
+            async for message in thread.history(oldest_first=True):
+                if message.content.startswith("Content: "):
+                    original_content = message.content[len("Content: "):]
+                    break
+            else:
+                original_content = "No original content found."
 
-            # Close the original thread
+            await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention}")
+
             await thread.edit(locked=True, archived=True)
             await interaction.response.send_message(f"The thread has been moved to a private channel: {new_thread.jump_url}", ephemeral=True)
