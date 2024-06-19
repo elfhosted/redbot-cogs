@@ -21,8 +21,8 @@ class Buttons(discord.ui.View):
         if channel and isinstance(channel, (discord.Thread, discord.ForumChannel)):
             member = interaction.guild.get_member(interaction.user.id)
             mylogger.info(f"Close button pressed by {interaction.user.name} (ID: {interaction.user.id}) with roles: {[role.id for role in member.roles]}")
-            mylogger.info(f"Required bot role ID: {self.bot_role.id}")
-            if interaction.user.id == self.user_id or self.bot_role in member.roles:
+            mylogger.info(f"Required bot role ID: {self.bot_role}")
+            if interaction.user.id == self.user_id or self.bot_role in [role.id for role in member.roles]:
                 await self.cog._close(interaction)
             else:
                 await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
@@ -121,18 +121,32 @@ class Threads(commands.Cog):
             except discord.Forbidden:
                 mylogger.error("Missing permissions to pin messages.")
 
-    @app_commands.command()
+    @commands.hybrid_command(name="close")
+    async def hybrid_close(self, ctx: commands.Context):
+        """Close the current thread."""
+        await self._close(ctx)
+
+    @app_commands.command(name="close")
     async def close(self, interaction: discord.Interaction):
-        role2 = interaction.guild.get_role(self.role2)
-        mylogger.info(f"close command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
-        if role2 not in interaction.user.roles:
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
-            return
         await self._close(interaction)
 
-    async def _close(self, interaction):
-        if isinstance(interaction.channel, (discord.Thread, discord.ForumChannel)):
-            channel = interaction.channel
+    async def _close(self, ctx_or_interaction):
+        if isinstance(ctx_or_interaction, commands.Context):
+            channel = ctx_or_interaction.channel
+            member = ctx_or_interaction.author
+            send = ctx_or_interaction.send
+        else:
+            channel = ctx_or_interaction.channel
+            member = ctx_or_interaction.user
+            send = ctx_or_interaction.response.send_message
+
+        role2 = channel.guild.get_role(self.role2)
+        mylogger.info(f"close command invoked by {member.name} with roles: {[role.id for role in member.roles]}")
+        if role2.id not in [role.id for role in member.roles]:
+            await send("You don't have permission to use this command.")
+            return
+
+        if isinstance(channel, (discord.Thread, discord.ForumChannel)):
             channel_owner = channel.owner if isinstance(channel, discord.Thread) else None
             initial_message_content = str(channel)
 
@@ -161,20 +175,19 @@ class Threads(commands.Cog):
                 mylogger.info(f"user_that_needed_help_id: {user_that_needed_help_id}")
                 mylogger.info(f"channel.owner_id: {channel.owner_id}")
                 if channel.parent and channel.parent.id == self.parent_channel_id:
-                    member = interaction.guild.get_member(interaction.user.id)
                     mylogger.info(f"member.id: {member.id}")
                     mylogger.info(f"member.guild_permissions.manage_threads: {member.guild_permissions.manage_threads}")
                     mylogger.info(f"Member roles: {[role.id for role in member.roles]}")
-                    mylogger.info(f"Role2 ID: {self.role2.id}")
+                    mylogger.info(f"Role2 ID: {self.role2}")
                     if member is None:
-                        await interaction.response.send_message(
+                        await send(
                             f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                         return
 
-                    if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or any(role.id == self.role2.id for role in member.roles):
+                    if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or any(role.id == self.role2 for role in member.roles):
                         mylogger.info(f"User {member.name} has permissions to close the thread directly.")
                         try:
-                            await interaction.response.send_message(
+                            await send(
                                 f"This post has been marked as Resolved and has now been closed."
                                 f"\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
                                 ephemeral=False)
@@ -186,29 +199,24 @@ class Threads(commands.Cog):
                             )
                         except Exception as e:
                             mylogger.exception("An error occurred while closing the thread", exc_info=e)
-                            await interaction.response.send_message(
+                            await send(
                                 f"An unexpected error occurred. Please try again later. {e}", ephemeral=True)
                         except discord.Forbidden:
-                            await interaction.response.send_message(
+                            await send(
                                 f"I don't have the necessary permissions to close and lock the thread.", ephemeral=True)
                         except discord.HTTPException:
-                            await interaction.response.send_message(
+                            await send(
                                 f"An error occurred while attempting to close and lock the thread.", ephemeral=True)
                     else:
                         mylogger.info(f"User {member.name} does not have the required permissions to close the thread directly.")
-                        await interaction.response.send_message(
+                        await send(
                             f"Hello {channel_owner.mention}, a user has suggested that this thread has been resolved and can be closed."
                             f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread.")
                 else:
-                    await interaction.response.send_message(f"This command can only be used in a thread.", ephemeral=True)
+                    await send(f"This command can only be used in a thread.", ephemeral=True)
             elif isinstance(channel, discord.ForumChannel):
-                forum_channel = interaction.channel
-                member = interaction.guild.get_member(interaction.user.id)
-                if member is None:
-                    await interaction.response.send_message(
-                        f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
-                    return
-                if member.guild_permissions.manage_threads or any(role.id == self.role2.id for role in member.roles):
+                forum_channel = channel
+                if member.guild_permissions.manage_threads or any(role.id == self.role2 for role in member.roles):
                     try:
                         tags = [tag for tag in forum_channel.available_tags if tag.name.lower() == "closed"]
                         await forum_channel.edit(
@@ -216,25 +224,25 @@ class Threads(commands.Cog):
                             archived=True,
                             applied_tags=tags
                         )
-                        await interaction.response.send_message(
+                        await send(
                             f"This post has been marked as Resolved and has now been closed.", ephemeral=False)
                     except Exception as e:
-                        await interaction.response.send_message(
+                        await send(
                             f"An unexpected error occurred. Please try again later. {e}", ephemeral=True)
                     except discord.Forbidden:
-                        await interaction.response.send_message(
+                        await send(
                             f"I don't have the necessary permissions to close and lock the thread.", ephemeral=True)
                     except discord.HTTPException:
-                        await interaction.response.send_message(
+                        await send(
                             f"An error occurred while attempting to close and lock the thread.", ephemeral=True)
                 else:
-                    await interaction.response.send_message(
+                    await send(
                         f"You don't have permission to use this command.", ephemeral=True)
 
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
         role2 = interaction.guild.get_role(self.role2)
-        if role2 not in interaction.user.roles:
+        if role2.id not in [role.id for role in interaction.user.roles]:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
 
