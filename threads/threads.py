@@ -124,6 +124,7 @@ class Threads(commands.Cog):
     @app_commands.command()
     async def close(self, interaction: discord.Interaction):
         role2 = interaction.guild.get_role(self.role2)
+        mylogger.info(f"close command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
         if role2 not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
@@ -180,6 +181,7 @@ class Threads(commands.Cog):
                             applied_tags=tags
                         )
                     except Exception as e:
+                        mylogger.exception("An error occurred while closing the thread", exc_info=e)
                         await interaction.response.send_message(
                             f"An unexpected error occurred. Please try again later. {e}", ephemeral=True)
                     except discord.Forbidden:
@@ -189,6 +191,7 @@ class Threads(commands.Cog):
                         await interaction.response.send_message(
                             f"An error occurred while attempting to close and lock the thread.", ephemeral=True)
                 else:
+                    mylogger.info(f"User {member.name} does not have the required permissions to close the thread directly.")
                     await interaction.response.send_message(
                         f"Hello {channel_owner.mention}, a user has suggested that this thread has been resolved and can be closed."
                         f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread.")
@@ -263,3 +266,5 @@ class Threads(commands.Cog):
                 await interaction.followup.send(f"The thread has been moved to a private channel: {new_thread_message.jump_url}", ephemeral=True)
             except discord.NotFound:
                 pass
+        else:
+            await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
