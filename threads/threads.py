@@ -216,7 +216,7 @@ class Threads(commands.Cog):
     async def _make_private(self, interaction):
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
-            author_name = thread.name.split(' ')[0]  # Assuming the author's name is the first word in the thread name
+            author_name = re.search(r'\(([^)]+)\)', thread.name).group(1)  # Extract the username from the thread name
             user = discord.utils.get(thread.guild.members, name=author_name)
             role2 = thread.guild.get_role(self.role2)
 

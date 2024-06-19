@@ -95,8 +95,11 @@ class RedBotCogSupport(commands.Cog):
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
                 # Create a thread in the forum channel with content
-                thread = await forum_channel.create_thread(name=subject, content=description)
-                await thread.send(content=f"{description}", files=[await a.to_file() for a in message_link.attachments])
+                thread = await forum_channel.create_thread(name=subject, content=description, message=message_link.content, applied_tags=["open"], auto_archive_duration=10080)
+                
+                if message_link.attachments:
+                    for attachment in message_link.attachments:
+                        await thread.send(file=await attachment.to_file())
 
                 # Notify the original message author and provide the link to the new thread
                 await message_link.author.send(f"A new support thread has been created for your message: {thread.jump_url}")
