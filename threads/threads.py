@@ -15,7 +15,7 @@ class Buttons(discord.ui.View):
         self.counter = 0
         super().__init__(timeout=timeout)
 
-    @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="Close Post")
+    @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="Close_Post")
     async def gray_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
         channel = interaction.channel
         if channel and isinstance(channel, (discord.Thread, discord.TextChannel)):
@@ -23,7 +23,7 @@ class Buttons(discord.ui.View):
             mylogger.info(f"Close button pressed by {interaction.user.name} (ID: {interaction.user.id}) with roles: {[role.id for role in member.roles]}")
             mylogger.info(f"Required bot role ID: {self.bot_role}")
             if interaction.user.id == self.user_id or self.bot_role in [role.id for role in member.roles]:
-                await self.cog._close(interaction)
+                await self.cog._handle_close(interaction)
             else:
                 await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
 
@@ -115,32 +115,23 @@ class Threads(commands.Cog):
                 f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
                 allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user]), view=Buttons(self, bot_role, user_id))
             message = await thread.send(
-                "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
+                "You can press the \"Close Post\" button above or type `/close_thread` at any time to close this post.")
             try:
                 await message.pin(reason="Makes it easier to close the post.")
             except discord.Forbidden:
                 mylogger.error("Missing permissions to pin messages.")
 
-    @commands.hybrid_command(name="close")
+    @commands.hybrid_command(name="close_thread")
     async def hybrid_close(self, ctx):
         """Close the current thread."""
-        role2 = ctx.guild.get_role(self.role2)
-        mylogger.info(f"close command invoked by {ctx.author.name} with roles: {[role.id for role in ctx.author.roles]}")
-        if role2.id not in [role.id for role in ctx.author.roles]:
-            await ctx.send("You don't have permission to use this command.")
-            return
-        await self._close(ctx)
+        await self._handle_close(ctx)
 
-    @app_commands.command()
+    @app_commands.command(name="close_thread")
     async def close(self, interaction: discord.Interaction):
-        role2 = interaction.guild.get_role(self.role2)
-        mylogger.info(f"close command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
-        if role2.id not in [role.id for role in interaction.user.roles]:
-            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
-            return
-        await self._close(interaction)
+        """Close the current thread."""
+        await self._handle_close(interaction)
 
-    async def _close(self, ctx_or_interaction):
+    async def _handle_close(self, ctx_or_interaction):
         if isinstance(ctx_or_interaction, commands.Context):
             channel = ctx_or_interaction.channel
             member = ctx_or_interaction.author
@@ -215,7 +206,7 @@ class Threads(commands.Cog):
                         mylogger.info(f"User {member.name} does not have the required permissions to close the thread directly.")
                         await send(
                             f"Hello {channel_owner.mention}, a user has suggested that this thread has been resolved and can be closed."
-                            f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread.")
+                            f"\n\nPlease confirm that you are happy to close this thread by typing `/close_thread` or by pressing the Close Post button which is pinned to this thread.")
                 else:
                     await send(f"This command can only be used in a thread.", ephemeral=True)
             elif isinstance(channel, discord.TextChannel):
@@ -281,3 +272,6 @@ class Threads(commands.Cog):
             await thread.edit(locked=True, archived=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
+
+def setup(bot):
+    bot.add_cog(Threads(bot))
