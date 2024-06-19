@@ -229,16 +229,13 @@ class Threads(commands.Cog):
             # Create a new thread in the private channel
             new_thread = await private_channel.create_thread(name=thread.name)
 
-            # Add user and role2 to the new private thread
-            await new_thread.set_permissions(user, read_messages=True, send_messages=True)
-            await new_thread.set_permissions(role2, read_messages=True, send_messages=True)
-
-            # Send the opening message and link to the original thread
-            opening_message = await thread.history(oldest_first=True).flatten()[0]
+            # Mention the user and role2 in the new private thread
             await new_thread.send(f"Private thread created for {user.mention} by {interaction.user.mention}. Here is the original thread: {thread.jump_url}")
+
+            # Send the opening message
+            opening_message = await thread.history(oldest_first=True).flatten()[0]
             await new_thread.send(content=opening_message.content, files=[await attachment.to_file() for attachment in opening_message.attachments])
 
             # Close the original thread
             await thread.edit(locked=True, archived=True)
             await interaction.response.send_message(f"The thread has been moved to a private channel: {new_thread.jump_url}", ephemeral=True)
-
