@@ -18,11 +18,19 @@ class RedBotCogSupport(commands.Cog):
 
     @commands.hybrid_command(name="support")
     @app_commands.describe(message_link="The discord message link or ID you want to create a new elf-support forum post.")
-    async def support(self, ctx, message_link: str):
+    async def support(self, ctx, message_link: str = None):
         try:
-            # Fetch the message from the message link or ID
-            message_id = int(message_link.split('/')[-1]) if '/' in message_link else int(message_link)
-            message_link = await ctx.channel.fetch_message(message_id)
+            if message_link:
+                # Fetch the message from the message link or ID
+                message_id = int(message_link.split('/')[-1]) if '/' in message_link else int(message_link)
+                message_link = await ctx.channel.fetch_message(message_id)
+            elif ctx.message.reference:
+                # Use the replied message if no link or ID is provided
+                message_id = ctx.message.reference.message_id
+                message_link = await ctx.channel.fetch_message(message_id)
+            else:
+                await ctx.send("Please provide a valid message link, ID, or reply to a message.")
+                return
 
             # Check if the linked message is associated with a guild
             if not message_link.guild:
