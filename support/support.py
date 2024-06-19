@@ -80,11 +80,11 @@ class RedBotCogSupport(commands.Cog):
                     for attachment in message_link.attachments:
                         await thread.send(file=await attachment.to_file())
 
-                initial_message = await thread.fetch_initial_message()
+                first_message = await thread.history(oldest_first=True).flatten()[0]
 
-                await message_link.author.send(f"A new support thread has been created for your message: {initial_message.jump_url}")
+                await message_link.author.send(f"A new support thread has been created for your message: {first_message.jump_url}")
                 await message_link.delete()
-                trace_message = await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {initial_message.jump_url} by {invoker_display_name}")
+                trace_message = await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {first_message.jump_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
 

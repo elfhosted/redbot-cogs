@@ -113,10 +113,13 @@ class Threads(commands.Cog):
 
             await thread.send(
                 f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
-                allowed_mentions=discord.AllowedMentions(roles=[role1, role2]), view=Buttons(self, bot_role, user_id))
+                allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=True), view=Buttons(self, bot_role, user_id))
             message = await thread.send(
                 "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
-            await message.pin(reason="Makes it easier to close the post.")
+            try:
+                await message.pin(reason="Makes it easier to close the post.")
+            except discord.Forbidden:
+                mylogger.error("Missing permissions to pin messages.")
 
     @app_commands.command()
     async def close(self, interaction: discord.Interaction):
