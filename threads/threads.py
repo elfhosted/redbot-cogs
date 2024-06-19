@@ -273,9 +273,10 @@ class Threads(commands.Cog):
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
 
-def setup(bot):
+async def setup(bot):
     # Unregister the 'close_thread' command if it is already registered
-    if 'close_thread' in bot.tree.get_commands():
-        bot.tree.remove_command('close_thread')
+    command = bot.tree.get_command('close_thread')
+    if command:
+        bot.tree.remove_command(command.name)
 
-    bot.add_cog(Threads(bot))
+    await bot.add_cog(Threads(bot))
