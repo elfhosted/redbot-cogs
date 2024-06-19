@@ -1,18 +1,18 @@
 import discord
 import logging
 from redbot.core import commands, app_commands
-from discord.utils import get
 
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
 
+# Create logger
 mylogger = logging.getLogger('test_support')
-mylogger.setLevel(logging.DEBUG)
+mylogger.setLevel(logging.DEBUG)  # Set the logging level to DEBUG
 
 class RedBotCogSupport(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bot_name = self.bot.user.name
-        self.bot_uid = self.bot.user.id
+        self.bot_name = bot.user.name
+        self.bot_uid = bot.user.id
 
     @commands.hybrid_command(name="support")
     @app_commands.describe(message_link="The discord message link or ID you want to create a new elf-support forum post.")
@@ -48,6 +48,8 @@ class RedBotCogSupport(commands.Cog):
             channel_name = ctx.channel.name if isinstance(ctx.channel, discord.TextChannel) else "Direct Message"
         
             mylogger.info(f"Support invoked by {author_name} in {guild_name}/{channel_name} (ID: {ctx.guild.id if ctx.guild else 'N/A'}/{ctx.channel.id if ctx.guild else 'N/A'})")
+            mylogger.info(f"message_link.id: {message_link.id}")
+            
             invoker_display_name = ctx.author.display_name
             invoker_username = ctx.author.name
             mylogger.info(f"Invoker: {invoker_display_name} ({invoker_username}), Roles: {ctx.author.roles}")
@@ -63,19 +65,20 @@ class RedBotCogSupport(commands.Cog):
 
             if isinstance(message_link.author, discord.Member) and message_link.guild:
                 author_display_name = message_link.author.display_name
+                
                 await ctx.send("Processing your request...")
 
                 forum_channel_id = None
                 guild_id = None
                 if self.bot_uid == 1250781032756674641:
                     forum_channel_id = 1252251752397537291
-                    guild_id = 720087029991473184  # Replace with actual guild ID
+                    guild_id = 720087029991473184
                 elif self.bot_uid == 1252847131476230194:
                     forum_channel_id = 1252251752397537291
-                    guild_id = 720087029991473184  # Replace with actual guild ID
+                    guild_id = 720087029991473184 
                 elif self.bot_uid == 1250431337156837428:
                     forum_channel_id = 1245513340176961606
-                    guild_id = 396055506072109067  # Replace with actual guild ID
+                    guild_id = 396055506072109067
 
                 forum_channel = self.bot.get_channel(forum_channel_id)
                 if not forum_channel:
@@ -84,16 +87,10 @@ class RedBotCogSupport(commands.Cog):
                 subject = f"{author_display_name} ({message_link.author.name}) needs elf-ssistance. Invoked by {invoker_display_name}"
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
-                thread = await forum_channel.create_thread(name=subject, content=description, applied_tags=[discord.utils.get(forum_channel.available_tags, name="open")], auto_archive_duration=10080)
-                thread_url = f"https://discord.com/channels/{guild_id}/{thread.id}"
+                thread, message = await forum_channel.create_thread(name=subject, content=description, files=[await a.to_file() for a in message_link.attachments])
 
-                if message_link.attachments:
-                    for attachment in message_link.attachments:
-                        await thread.send(file=await attachment.to_file())
-
-                await message_link.author.send(f"A new support thread has been created for your message: {thread_url}")
                 await message_link.delete()
-                await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {thread_url} by {invoker_display_name}")
+                trace_message = await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
 
