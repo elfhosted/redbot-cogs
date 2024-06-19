@@ -8,11 +8,10 @@ mylogger = logging.getLogger('threads')
 mylogger.setLevel(logging.DEBUG)
 
 class Buttons(discord.ui.View):
-    def __init__(self, cog, bot_role, user_id, *, timeout=None):
+    def __init__(self, cog, bot_role_id, user_id, *, timeout=None):
         self.cog = cog
-        self.bot_role = bot_role
+        self.bot_role_id = bot_role_id
         self.user_id = user_id
-        self.counter = 0
         super().__init__(timeout=timeout)
 
     @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="Close Post")
@@ -21,8 +20,8 @@ class Buttons(discord.ui.View):
         if channel and isinstance(channel, discord.Thread):
             member = interaction.guild.get_member(interaction.user.id)
             mylogger.info(f"Close button pressed by {interaction.user.name} (ID: {interaction.user.id}) with roles: {[role.id for role in member.roles]}")
-            mylogger.info(f"Required bot role ID: {self.bot_role}")
-            if interaction.user.id == self.user_id or self.bot_role in [role.id for role in member.roles]:
+            mylogger.info(f"Required bot role ID: {self.bot_role_id}")
+            if interaction.user.id == self.user_id or any(role.id == self.bot_role_id for role in member.roles):
                 await self.cog._close(interaction)
             else:
                 await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
@@ -113,7 +112,7 @@ class Threads(commands.Cog):
 
             await thread.send(
                 f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
-                allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user]), view=Buttons(self, bot_role, user_id))
+                allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user]), view=Buttons(self, bot_role.id, user_id))
             message = await thread.send(
                 "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
             try:
@@ -177,7 +176,7 @@ class Threads(commands.Cog):
                         f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                     return
 
-                if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.role2 in [role.id for role in member.roles]:
+                if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or any(role.id == self.role2 for role in member.roles):
                     mylogger.info(f"User {member.name} has permissions to close the thread directly.")
                     try:
                         await send(
@@ -214,7 +213,7 @@ class Threads(commands.Cog):
                 await send(
                     f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                 return
-            if member.guild_permissions.manage_threads or self.role2 in [role.id for role in member.roles]:
+            if member.guild_permissions.manage_threads or any(role.id == self.role2 for role in member.roles):
                 try:
                     tags = [tag for tag in forum_channel.available_tags if tag.name.lower() == "closed"]
                     await forum_channel.edit(
