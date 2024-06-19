@@ -4,15 +4,9 @@ import re
 import logging
 from redbot.core import commands, app_commands
 
-# 1198381095553617922 # ElfVengers
-# 1198385945049825322 # Elf-trainees
-# 1118645576884572303 # elf-friends
-# 1245513340176961606 # elf-support
-
 # Create logger
 mylogger = logging.getLogger('threads')
 mylogger.setLevel(logging.DEBUG)  # Set the logging level to DEBUG
-
 
 class Buttons(discord.ui.View):
     def __init__(self, cog, bot_role, user_id, *, timeout=None):
@@ -44,11 +38,12 @@ class Threads(commands.Cog):
         self.setup_role_logic()
 
     def setup_role_logic(self):
-        self.role1 = None
+        self.role1 = None 
         self.role2 = None
         self.sponsor = None
         self.general_chat = None
         self.parent_channel_id = None
+        self.private_channel_id = None  # Replace with your private channel ID
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
             self.role1 = 1252431218025431041  # Test Priority Support
@@ -56,12 +51,21 @@ class Threads(commands.Cog):
             self.sponsor = 1232124371901087764  # Test Sponsor
             self.general_chat = 720087030750773332  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
+            self.private_channel_id = 720087030750773332  # #general
+        elif self.bot.user.id == 1252847131476230194:  # Sparky Jr
+            self.role1 = 1252431218025431041  # Test Priority Support
+            self.role2 = 1252252269790105721  # Test-Elf-Venger
+            self.sponsor = 1232124371901087764  # Test Sponsor
+            self.general_chat = 720087030750773332  # #general
+            self.parent_channel_id = 1252251752397537291  # #test-elf-support
+            self.private_channel_id = 720087030750773332  # #general
         elif self.bot.user.id == 1250431337156837428:  # Spanky
             self.role1 = 1198385945049825322  # Elf Trainees
             self.role2 = 1198381095553617922  # ElfVenger
             self.sponsor = 862041125706268702  # Sponsor - not used
             self.general_chat = 1118645576884572303  # #elf-friends
             self.parent_channel_id = 1245513340176961606  # #elf-support
+            self.private_channel_id = 1118645576884572303  # #elf-friends
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
@@ -116,7 +120,7 @@ class Threads(commands.Cog):
                     await thread.edit(applied_tags=tags)
 
             await thread.send(
-                f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you're reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `!troubleshoot` for details.",
+                f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
                 allowed_mentions=discord.AllowedMentions(roles=[role1, role2]), view=Buttons(self, bot_role, user_id))
             message = await thread.send(
                 "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
@@ -166,7 +170,7 @@ class Threads(commands.Cog):
                         f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                     return
 
-                if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id:
+                if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.role2 in member.roles:
                     try:
                         await interaction.response.send_message(
                             f"This post has been marked as Resolved and has now been closed."
@@ -198,3 +202,43 @@ class Threads(commands.Cog):
                         f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread.")
             else:
                 await interaction.response.send_message(f"This command can only be used in a thread.", ephemeral=True)
+
+    @app_commands.command()
+    async def private(self, interaction: discord.Interaction):
+        # Check if the user has the role to make the thread private
+        role2 = interaction.guild.get_role(self.role2)
+        if role2 not in interaction.user.roles:
+            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+            return
+
+        await self._make_private(interaction)
+
+    async def _make_private(self, interaction):
+        if isinstance(interaction.channel, discord.Thread):
+            thread = interaction.channel
+            author_name = thread.name.split(' ')[0]  # Assuming the author's name is the first word in the thread name
+            user = discord.utils.get(thread.guild.members, name=author_name)
+            role2 = thread.guild.get_role(self.role2)
+
+            # Create a new private thread in the private channel
+            private_channel = self.bot.get_channel(self.private_channel_id)
+            if not private_channel:
+                await interaction.response.send_message("Could not find the private channel.", ephemeral=True)
+                return
+
+            # Create a new thread in the private channel
+            new_thread = await private_channel.create_thread(name=thread.name)
+
+            # Add user and role2 to the new private thread
+            await new_thread.set_permissions(user, read_messages=True, send_messages=True)
+            await new_thread.set_permissions(role2, read_messages=True, send_messages=True)
+
+            # Send the opening message and link to the original thread
+            opening_message = await thread.history(oldest_first=True).flatten()[0]
+            await new_thread.send(f"Private thread created for {user.mention} by {interaction.user.mention}. Here is the original thread: {thread.jump_url}")
+            await new_thread.send(content=opening_message.content, files=[await attachment.to_file() for attachment in opening_message.attachments])
+
+            # Close the original thread
+            await thread.edit(locked=True, archived=True)
+            await interaction.response.send_message(f"The thread has been moved to a private channel: {new_thread.jump_url}", ephemeral=True)
+

@@ -1,6 +1,7 @@
 import discord
 import logging
 from redbot.core import commands, app_commands
+from discord.utils import get
 
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
 
@@ -16,9 +17,13 @@ class RedBotCogSupport(commands.Cog):
         self.bot_uid = bot.user.id
 
     @commands.hybrid_command(name="support")
-    @app_commands.describe(message_link="The discord message link you want to create a new elf-support forum post.")
-    async def support(self, ctx, message_link: discord.Message):
+    @app_commands.describe(message_link="The discord message link or ID you want to create a new elf-support forum post.")
+    async def support(self, ctx, message_link: str):
         try:
+            # Fetch the message from the message link or ID
+            message_id = int(message_link.split('/')[-1]) if '/' in message_link else int(message_link)
+            message_link = await ctx.channel.fetch_message(message_id)
+
             # Check if the linked message is associated with a guild
             if not message_link.guild:
                 return await ctx.send("The specified message is not associated with a guild. Aborting...")
@@ -35,7 +40,6 @@ class RedBotCogSupport(commands.Cog):
             channel_name = ctx.channel.name if isinstance(ctx.channel, discord.TextChannel) else "Direct Message"
         
             mylogger.info(f"Support invoked by {author_name} in {guild_name}/{channel_name} (ID: {ctx.guild.id if ctx.guild else 'N/A'}/{ctx.channel.id if ctx.guild else 'N/A'})")
-            # mylogger.info(f"Processing message: {message_link.id}")
             
             # Log the invoker and their roles for troubleshooting
             invoker_display_name = ctx.author.display_name
@@ -68,6 +72,8 @@ class RedBotCogSupport(commands.Cog):
                 forum_channel_id = None
                 if self.bot_uid == 1250781032756674641:     # Sparky
                     forum_channel_id = 1252251752397537291  # #test-elf-support
+                elif self.bot_uid == 1252847131476230194:     # Sparky Jr
+                    forum_channel_id = 1252251752397537291  # #test-elf-support
                 elif self.bot_uid == 1250431337156837428:   # Spanky
                     forum_channel_id = 1245513340176961606  # #elf-support
 
@@ -81,11 +87,15 @@ class RedBotCogSupport(commands.Cog):
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
                 # Create a thread in the forum channel
-                thread, message = await forum_channel.create_thread(name=f"{subject}", content=f"{description}", files=[await a.to_file() for a in message_link.attachments])
+                thread = await forum_channel.create_thread(name=f"{subject}")
+                await thread.send(content=f"{description}", files=[await a.to_file() for a in message_link.attachments])
+
+                # Notify the original message author and provide the link to the new thread
+                await message_link.author.send(f"A new support thread has been created for your message: {thread.jump_url}")
 
                 # Delete the original message and leave a trace
                 await message_link.delete()
-                trace_message = await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
+                trace_message = await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {thread.jump_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
 
