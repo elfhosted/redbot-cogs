@@ -66,12 +66,16 @@ class RedBotCogSupport(commands.Cog):
                 await ctx.send("Processing your request...")
 
                 forum_channel_id = None
+                guild_id = None
                 if self.bot_uid == 1250781032756674641:
                     forum_channel_id = 1252251752397537291
+                    guild_id = 720087029991473184  # Replace with actual guild ID
                 elif self.bot_uid == 1252847131476230194:
                     forum_channel_id = 1252251752397537291
+                    guild_id = 720087029991473184  # Replace with actual guild ID
                 elif self.bot_uid == 1250431337156837428:
                     forum_channel_id = 1245513340176961606
+                    guild_id = 396055506072109067  # Replace with actual guild ID
 
                 forum_channel = self.bot.get_channel(forum_channel_id)
                 if not forum_channel:
@@ -81,7 +85,7 @@ class RedBotCogSupport(commands.Cog):
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
                 thread = await forum_channel.create_thread(name=subject, content=description, applied_tags=[discord.utils.get(forum_channel.available_tags, name="open")], auto_archive_duration=10080)
-                thread_url = f"https://discord.com/channels/{thread.guild.id}/{thread.id}"
+                thread_url = f"https://discord.com/channels/{guild_id}/{thread.id}"
 
                 if message_link.attachments:
                     for attachment in message_link.attachments:
@@ -96,4 +100,3 @@ class RedBotCogSupport(commands.Cog):
         except Exception as e:
             mylogger.exception('An error occurred during message processing:', exc_info=e)
             await ctx.send("An error occurred while processing your request.")
-
