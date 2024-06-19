@@ -95,7 +95,7 @@ class RedBotCogSupport(commands.Cog):
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
                 # Create a thread in the forum channel with content
-                thread = await forum_channel.create_thread(name=subject, content=description, message=message_link.content, applied_tags=["open"], auto_archive_duration=10080)
+                thread = await forum_channel.create_thread(name=subject, content=description, applied_tags=["open"], auto_archive_duration=10080)
                 
                 if message_link.attachments:
                     for attachment in message_link.attachments:
