@@ -124,11 +124,20 @@ class Threads(commands.Cog):
     @commands.hybrid_command(name="close")
     async def hybrid_close(self, ctx):
         """Close the current thread."""
+        role2 = ctx.guild.get_role(self.role2)
+        mylogger.info(f"close command invoked by {ctx.author.name} with roles: {[role.id for role in ctx.author.roles]}")
+        if role2.id not in [role.id for role in ctx.author.roles]:
+            await ctx.send("You don't have permission to use this command.")
+            return
         await self._close(ctx)
 
-    @app_commands.command(name="close")
+    @app_commands.command()
     async def close(self, interaction: discord.Interaction):
-        """Close the current thread."""
+        role2 = interaction.guild.get_role(self.role2)
+        mylogger.info(f"close command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
+        if role2.id not in [role.id for role in interaction.user.roles]:
+            await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
+            return
         await self._close(interaction)
 
     async def _close(self, ctx_or_interaction):
@@ -140,12 +149,6 @@ class Threads(commands.Cog):
             channel = ctx_or_interaction.channel
             member = ctx_or_interaction.user
             send = ctx_or_interaction.response.send_message
-
-        role2 = member.guild.get_role(self.role2)
-        mylogger.info(f"close command invoked by {member.name} with roles: {[role.id for role in member.roles]}")
-        if role2.id not in [role.id for role in member.roles]:
-            await send("You don't have permission to use this command.", ephemeral=True)
-            return
 
         if isinstance(channel, (discord.Thread, discord.TextChannel)):
             channel_owner = channel.owner if isinstance(channel, discord.Thread) else None
@@ -278,6 +281,3 @@ class Threads(commands.Cog):
             await thread.edit(locked=True, archived=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
-
-async def setup(bot):
-    await bot.add_cog(Threads(bot))
