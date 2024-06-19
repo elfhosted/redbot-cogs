@@ -94,8 +94,8 @@ class RedBotCogSupport(commands.Cog):
                 subject = f"{author_display_name} ({message_link.author.name}) needs elf-ssistance. Invoked by {invoker_display_name}"
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
-                # Create a thread in the forum channel
-                thread = await forum_channel.create_thread(name=f"{subject}")
+                # Create a thread in the forum channel with content
+                thread = await forum_channel.create_thread(name=subject, content=description)
                 await thread.send(content=f"{description}", files=[await a.to_file() for a in message_link.attachments])
 
                 # Notify the original message author and provide the link to the new thread
