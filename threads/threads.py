@@ -171,7 +171,7 @@ class Threads(commands.Cog):
                             f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                         return
 
-                    if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or any(role.id == self.role2 for role in member.roles):
+                    if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.role2 in [role.id for role in member.roles]:
                         mylogger.info(f"User {member.name} has permissions to close the thread directly.")
                         try:
                             await interaction.response.send_message(
@@ -203,7 +203,8 @@ class Threads(commands.Cog):
                     await interaction.response.send_message(f"This command can only be used in a thread.", ephemeral=True)
             elif isinstance(channel, discord.ForumChannel):
                 forum_channel = channel
-                if member.guild_permissions.manage_threads or any(role.id == self.role2 for role in member.roles):
+                member = interaction.guild.get_member(interaction.user.id)
+                if member.guild_permissions.manage_threads or self.role2 in [role.id for role in member.roles]:
                     try:
                         tags = [tag for tag in forum_channel.available_tags if tag.name.lower() == "closed"]
                         await forum_channel.edit(
@@ -265,3 +266,6 @@ class Threads(commands.Cog):
             await thread.edit(locked=True, archived=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
+
+async def setup(bot):
+    await bot.add_cog(Threads(bot))
