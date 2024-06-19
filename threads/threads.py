@@ -255,7 +255,7 @@ class Threads(commands.Cog):
 
             new_thread = await private_channel.create_thread(name=thread.name)
 
-            await new_thread.send(f"Private thread created for {user.mention}\n\nHere is the original thread: https://discord.com/channels/{interaction.guild.id}/{thread.id}")
+            await new_thread.send(f"Private thread created for {user.mention}\n\nHere is the original thread: https://discord.com/channels/{interaction.guild.id}/{thread.parent.id}/{thread.id}")
 
             async for message in thread.history(oldest_first=True):
                 if message.content.startswith("Content: "):

@@ -11,7 +11,7 @@ mylogger.setLevel(logging.DEBUG)
 class RedBotCogSupport(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.bot_name = bot.user.name
+        self.bot_name = self.bot.user.name
         self.bot_uid = self.bot.user.id
 
     @commands.hybrid_command(name="support")
@@ -80,7 +80,7 @@ class RedBotCogSupport(commands.Cog):
                     for attachment in message_link.attachments:
                         await thread.send(file=await attachment.to_file())
 
-                thread_url = f"https://discord.com/channels/{ctx.guild.id}/{thread.id}"
+                thread_url = f"https://discord.com/channels/{ctx.guild.id}/{forum_channel.id}/{thread.id}"
 
                 await message_link.author.send(f"A new support thread has been created for your message: {thread_url}")
                 await message_link.delete()
