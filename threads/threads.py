@@ -253,9 +253,10 @@ class Threads(commands.Cog):
                 await interaction.response.send_message("Could not find the private channel.", ephemeral=True)
                 return
 
-            new_thread = await private_channel.create_thread(name=thread.name)
+            new_thread_name = f"{author_name} - Private Support"
+            new_thread = await private_channel.create_thread(name=new_thread_name)
 
-            await new_thread.send(f"Private thread created for {user.mention}\n\nHere is the original thread: https://discord.com/channels/{interaction.guild.id}/{thread.parent.id}/{thread.id}")
+            await new_thread.send(f"Private thread created for {user.mention}\n\nHere is the original thread: {thread.jump_url}")
 
             async for message in thread.history(oldest_first=True):
                 if message.content.startswith("Content: "):
@@ -268,6 +269,6 @@ class Threads(commands.Cog):
 
             await thread.edit(locked=True, archived=True)
             try:
-                await interaction.followup.send(f"The thread has been moved to a private channel: https://discord.com/channels/{interaction.guild.id}/{new_thread.id}", ephemeral=True)
+                await interaction.followup.send(f"The thread has been moved to a private channel: {new_thread.jump_url}", ephemeral=True)
             except discord.NotFound:
                 pass
