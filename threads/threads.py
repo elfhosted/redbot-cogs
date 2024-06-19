@@ -121,7 +121,7 @@ class Threads(commands.Cog):
             except discord.Forbidden:
                 mylogger.error("Missing permissions to pin messages.")
 
-    @commands.hybrid_command(name="close", with_app_command=False)
+    @commands.hybrid_command(name="close_thread")
     async def hybrid_close(self, ctx):
         """Close the current thread."""
         await self._handle_close(ctx)
@@ -154,7 +154,7 @@ class Threads(commands.Cog):
         else:
             await ctx_or_interaction.response.send_message(
                 f"Hello {thread.owner.mention}, a user has suggested that this thread has been resolved and can be closed."
-                f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread.")
+                f"\n\nPlease confirm that you are happy to close this thread by typing `/close_thread` or by pressing the Close Post button which is pinned to this thread.")
 
     async def _close_text_channel(self, ctx_or_interaction, channel, member):
         try:
