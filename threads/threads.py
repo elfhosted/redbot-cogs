@@ -176,7 +176,7 @@ class Threads(commands.Cog):
                         f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                     return
 
-                if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or any(role.id == self.role2 for role in member.roles):
+                if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.role2 in [role.id for role in member.roles]:
                     mylogger.info(f"User {member.name} has permissions to close the thread directly.")
                     try:
                         await send(
@@ -206,35 +206,8 @@ class Threads(commands.Cog):
                         f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread.")
             else:
                 await send(f"This command can only be used in a thread.", ephemeral=True)
-        elif isinstance(channel, discord.ForumChannel):
-            forum_channel = channel
-            member = ctx_or_interaction.guild.get_member(ctx_or_interaction.user.id)
-            if member is None:
-                await send(
-                    f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
-                return
-            if member.guild_permissions.manage_threads or any(role.id == self.role2 for role in member.roles):
-                try:
-                    tags = [tag for tag in forum_channel.available_tags if tag.name.lower() == "closed"]
-                    await forum_channel.edit(
-                        locked=True,
-                        archived=True,
-                        applied_tags=tags
-                    )
-                    await send(
-                        f"This post has been marked as Resolved and has now been closed.", ephemeral=False)
-                except Exception as e:
-                    await send(
-                        f"An unexpected error occurred. Please try again later. {e}", ephemeral=True)
-                except discord.Forbidden:
-                    await send(
-                        f"I don't have the necessary permissions to close and lock the thread.", ephemeral=True)
-                except discord.HTTPException:
-                    await send(
-                        f"An error occurred while attempting to close and lock the thread.", ephemeral=True)
-            else:
-                await send(
-                    f"You don't have permission to use this command.", ephemeral=True)
+        else:
+            await send(f"This command can only be used in a thread.", ephemeral=True)
 
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
