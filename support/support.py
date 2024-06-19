@@ -90,10 +90,12 @@ class RedBotCogSupport(commands.Cog):
                 thread, message = await forum_channel.create_thread(name=subject, content=description, files=[await a.to_file() for a in message_link.attachments])
 
                 await message_link.delete()
-                trace_message = await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
+                await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
 
+        except discord.Forbidden:
+            await ctx.send("I do not have permission to delete the message.")
         except Exception as e:
             mylogger.exception('An error occurred during message processing:', exc_info=e)
             await ctx.send("An error occurred while processing your request.")
