@@ -87,10 +87,16 @@ class RedBotCogSupport(commands.Cog):
                 if not forum_channel:
                     return await ctx.send(f'Could not find a channel with ID {forum_channel_id}.')
 
-                subject = f"{author_display_name} ({message_link.author.name}) needs elf-ssistance. Invoked by {invoker_display_name}"
+                subject = f"✋ - {message_link.author.name}"
+                # Ensure subject length is within the required bounds
+                if len(subject) > 100:
+                    subject = subject[:97] + "..."
+                mylogger.info(f"Thread subject: {subject} (length: {len(subject)})")
+
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
-                thread, message = await forum_channel.create_thread(name=subject, content=description, files=[await a.to_file() for a in message_link.attachments])
+                thread = await forum_channel.create_thread(name=subject, content=description)
+                message = await thread.send(content=description, files=[await a.to_file() for a in message_link.attachments])
 
                 await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
             else:

@@ -8,9 +8,6 @@ from redbot.core import commands, app_commands
 mylogger = logging.getLogger('threads')
 mylogger.setLevel(logging.DEBUG)
 
-ELF_GREEN = 0x437820
-RED_COLOR = 0xFF0000
-
 class Buttons(discord.ui.View):
     def __init__(self, cog, bot_role_id, user_id, *, timeout=None):
         self.cog = cog
@@ -30,6 +27,10 @@ class Buttons(discord.ui.View):
             else:
                 await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
 
+    @discord.ui.button(label="Private Mode", style=discord.ButtonStyle.green, emoji="🔒", custom_id="Private Mode")
+    async def private_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+        await self.cog._make_private(interaction)
+
 class Threads(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -38,30 +39,35 @@ class Threads(commands.Cog):
         self.setup_role_logic()
 
     def setup_role_logic(self):
-        self.role1 = None 
+        self.role1 = None
         self.role2 = None
         self.sponsor = None
         self.general_chat = None
         self.parent_channel_id = None
         self.private_channel_id = None
         self.transcript_channel_id = None
+        self.ticket_support = None
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
             self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 1253177629645865083   # #general
+            self.general_chat = 1253177629645865083  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
-            self.private_channel_id = 1253177629645865083    # #general
+            self.private_channel_id = 1253177629645865083  # #general
             self.transcript_channel_id = 1253171050217476106  #
+            self.support_notify = 1253214649592315955
+            self.ticket_support = 1252252269790105721
         elif self.bot.user.id == 1252847131476230194:  # Sparky Jr
             self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 1253177629645865083    # #general
+            self.general_chat = 1253177629645865083  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
-            self.private_channel_id = 1253177629645865083   # #general
+            self.private_channel_id = 1253177629645865083  # #general
             self.transcript_channel_id = 1253171050217476106  #
+            self.support_notify = 1253214649592315955
+            self.ticket_support = 1252252269790105721
         elif self.bot.user.id == 1250431337156837428:  # Spanky
             self.role1 = 1198385945049825322  # Elf Trainees
             self.role2 = 1198381095553617922  # ElfVenger
@@ -70,6 +76,8 @@ class Threads(commands.Cog):
             self.parent_channel_id = 1245513340176961606  # #elf-support
             self.private_channel_id = 1118645576884572303  # #elf-friends
             self.transcript_channel_id = 123456789012345678  # not setup
+            self.support_notify = 123456789012345678  # not setup
+            self.ticket_support = 1118863307084935259
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
@@ -127,18 +135,12 @@ class Threads(commands.Cog):
             except discord.Forbidden:
                 mylogger.error("Missing permissions to edit thread tags.")
 
-        embed = discord.Embed(
-            title="Welcome to the Support Thread!",
-            description=f"Welcome {user.mention if user else thread_owner.mention}!\n\nThis thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available.\n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
-            color=ELF_GREEN
-        )
-        embed.set_thumbnail(url="https://elfhosted.com/images/logo-green-text.jpg")
-
         try:
-            ping_message = await thread.send(content=f"<@&{self.role2}> {user.mention if user else thread_owner.mention}")
-            await ping_message.delete()
-            await thread.send(embed=embed)
-            message = await thread.send("You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
+            await thread.send(
+                f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` or press the button below if you want to switch this topic to private mode.",
+                allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user] if user else []), view=Buttons(self, bot_role.id, user_id))
+            message = await thread.send(
+                "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
             try:
                 await message.pin(reason="Makes it easier to close the post.")
             except discord.Forbidden:
@@ -171,11 +173,9 @@ class Threads(commands.Cog):
 
             mylogger.info(f"initial_message_content: {initial_message_content}")
 
-            match = re.search(r'(.*?) needs elf-ssistance\. Invoked by ', initial_message_content)
-            if match:
-                user_that_needed_help = match.group(1)
-            else:
-                user_that_needed_help = None
+            match = re.search(r'✋ - (.+)', channel.name)
+            username = match.group(1) if match else "U_n_k_n_o_w_n"
+            new_thread_name = f"👍 - {username}"
 
             user_that_needed_help_id = None
 
@@ -205,14 +205,14 @@ class Threads(commands.Cog):
                 if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.role2 in [role.id for role in member.roles]:
                     mylogger.info(f"User {member.name} has permissions to close the thread directly.")
                     try:
-                        embed = discord.Embed(
-                            description=f"This post has been marked as Resolved and has now been closed.\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
-                            color=RED_COLOR
-                        )
-                        await send(embed=embed)
+                        await send(
+                            f"This post has been marked as Resolved and has now been closed."
+                            f"\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
+                            ephemeral=False)
                         tags = [tag for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
                         try:
                             await channel.edit(
+                                name=new_thread_name,
                                 locked=True,
                                 archived=True,
                                 applied_tags=tags
@@ -243,6 +243,8 @@ class Threads(commands.Cog):
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
         role2 = interaction.guild.get_role(self.role2)
+        ticketrole = interaction.guild.get_role(self.ticket_support)
+        
         if role2 not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
@@ -252,7 +254,10 @@ class Threads(commands.Cog):
     async def _make_private(self, interaction):
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
-            match = re.search(r'\(([^)]+)\)', thread.name)
+            match = re.search(r'✋ - (.+)', thread.name)
+            username = match.group(1) if match else "U_n_k_n_o_w_n"
+            new_thread_name = f"🔒 - {username}"
+
             if thread.owner.id == self.bot_uid:
                 author_name = match.group(1) if match else "Unknown"
                 user = discord.utils.get(thread.guild.members, name=author_name)
@@ -261,14 +266,15 @@ class Threads(commands.Cog):
                 author_name = user.name
 
             role2 = thread.guild.get_role(self.role2)
+            ticketrole = thread.guild.get_role(self.ticket_support)
 
             private_channel = self.bot.get_channel(self.private_channel_id)
             if not private_channel:
                 await interaction.response.send_message("Could not find the private channel.", ephemeral=True)
                 return
 
-            new_thread_name = f"{author_name} - Private Support"
             new_thread = await private_channel.create_thread(name=new_thread_name)
+            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: {thread.jump_url}")
 
             original_content = "No original content found."
             if thread.owner.bot:
@@ -281,29 +287,22 @@ class Threads(commands.Cog):
                     original_content = message.content
                     break
 
-            embed = discord.Embed(
-                title="Private thread created",
-                description=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: {thread.jump_url}\n\nOriginal Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>",
-                color=ELF_GREEN
-            )
-            embed.set_thumbnail(url="https://elfhosted.com/images/logo-green-text.jpg")
-
-            ping_message = await new_thread.send(content=f"<@&{self.role2}> {user.mention if user else 'Unknown User'}")
-            await ping_message.delete()
-            await new_thread.send(embed=embed)
+            await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>")
 
             try:
-                await thread.edit(locked=True, archived=True)
+                notification_channel = self.bot.get_channel(self.support_notify)
+                if notification_channel:
+                    await notification_channel.send(f"New private ticket opened: {new_thread.jump_url}", allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
+            except Exception as e:
+                mylogger.error(f"Failed to notify support: {e}")
+
+            await interaction.channel.send(f"The thread has been moved to a private channel: {new_thread_message.jump_url}")
+
+            try:
+                await thread.edit(name=new_thread_name, locked=True, archived=True)
             except discord.Forbidden:
                 mylogger.error("Missing permissions to lock and archive the thread.")
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
-            else:
-                embed = discord.Embed(
-                    description=f"The thread has been moved to a private channel and is now closed.\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
-                    color=RED_COLOR
-                )
-                await interaction.channel.send(embed=embed)
-
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
 
@@ -318,7 +317,7 @@ class Threads(commands.Cog):
             return
 
         parent_channel = interaction.channel.parent_id
-        if parent_channel != self.parent_channel_id and parent_channel != self.private_channel_id:
+        if parent_channel != self.private_channel_id:
             await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
             return
 
@@ -389,15 +388,21 @@ class Threads(commands.Cog):
                 file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
             )
 
-        await interaction.channel.edit(archived=True, locked=True)
         try:
-            embed = discord.Embed(
-                description="This ticket has been closed and the channel has been archived.",
-                color=RED_COLOR
-            )
-            await interaction.channel.send(embed=embed)
-        except discord.Forbidden:
-            mylogger.error("Missing permissions to send messages in the thread after archiving.")
+            user_mention = re.search(r"<@!?(\d+)>", interaction.channel.name)
+            if user_mention:
+                user_id = int(user_mention.group(1))
+                user = interaction.guild.get_member(user_id)
+                if user:
+                    await user.send(
+                        f"Here is the transcript for your ticket: {interaction.channel.name}",
+                        file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
+                    )
+        except Exception as e:
+            mylogger.error(f"Failed to send transcript to user: {e}")
+
+        await interaction.channel.edit(archived=True, locked=True)
+        await interaction.channel.send("This ticket has been closed and the channel has been archived.")
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
