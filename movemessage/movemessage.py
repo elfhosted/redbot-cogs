@@ -1,8 +1,6 @@
 import discord
-from discord.ext import commands
 from redbot.core import commands
 
-# List of allowed role IDs
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
 
 class MoveMessage(commands.Cog):
@@ -48,7 +46,10 @@ class MoveMessage(commands.Cog):
         note = f"@{message.author.display_name}, your message has been moved here for reference:\n\n{message.content}\n\n[Original Message]({moved_message.jump_url})"
         await ctx.send(note)
 
-        await message.delete()
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            await ctx.send("I do not have permission to delete the message.")
 
 async def setup(bot):
     await bot.add_cog(MoveMessage(bot))
