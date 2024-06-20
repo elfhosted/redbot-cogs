@@ -348,18 +348,18 @@ class Threads(commands.Cog):
         </html>
         """
 
-        # Send the transcript to the transcript channel as an HTML file
+    
+        with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as tmp_file:
+            tmp_file.write(transcript_html)
+            tmp_file_path = tmp_file.name
+
         transcript_channel = self.bot.get_channel(self.transcript_channel_id)
         if transcript_channel:
             await transcript_channel.send(
                 f"Transcript for {interaction.channel.name}",
-                file=discord.File(
-                    fp=transcript_html.encode("utf-8"), 
-                    filename=f"{interaction.channel.name}_transcript.html"
-                )
+                file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
             )
 
-        # Lock the thread (only allowing read access)
         overwrites = interaction.channel.overwrites
         for role in interaction.guild.roles:
             if role.permissions.administrator:
@@ -367,7 +367,6 @@ class Threads(commands.Cog):
             overwrites[role] = discord.PermissionOverwrite(send_messages=False)
         await interaction.channel.edit(overwrites=overwrites)
 
-        # Close the thread
         await interaction.channel.edit(archived=True, locked=True)
         await interaction.channel.send("This ticket has been closed and the channel has been archived.")
 
