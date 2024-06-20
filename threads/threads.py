@@ -8,6 +8,9 @@ from redbot.core import commands, app_commands
 mylogger = logging.getLogger('threads')
 mylogger.setLevel(logging.DEBUG)
 
+ELF_GREEN = discord.Color(0x437820)
+RED_COLOR = discord.Color.red()
+
 class Buttons(discord.ui.View):
     def __init__(self, cog, bot_role_id, user_id, *, timeout=None):
         self.cog = cog
@@ -126,12 +129,14 @@ class Threads(commands.Cog):
 
         embed = discord.Embed(
             title="Welcome to the Support Thread!",
-            description=f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available.\n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
-            color=discord.Color.blue()
+            description=f"This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available.\n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
+            color=ELF_GREEN
         )
         embed.set_thumbnail(url="https://elfhosted.com/images/logo-green-text.jpg")
-        
+
         try:
+            ping_message = await thread.send(content=f"{user.mention if user else thread_owner.mention} <@&{self.role2}>")
+            await ping_message.delete()
             await thread.send(embed=embed, view=Buttons(self, bot_role.id, user_id))
             message = await thread.send(
                 "You can press the \"Close Ticket\" button above or type `/close` at any time to close this post.")
@@ -202,8 +207,8 @@ class Threads(commands.Cog):
                     mylogger.info(f"User {member.name} has permissions to close the thread directly.")
                     embed = discord.Embed(
                         title="Thread Closed",
-                        description="This post has been marked as Resolved and has now been closed.\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{}>.".format(self.general_chat),
-                        color=discord.Color.red()
+                        description=f"This post has been marked as Resolved and has now been closed.\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
+                        color=RED_COLOR
                     )
                     try:
                         await send(embed=embed, ephemeral=False)
@@ -266,7 +271,6 @@ class Threads(commands.Cog):
 
             new_thread_name = f"{author_name} - Private Support"
             new_thread = await private_channel.create_thread(name=new_thread_name)
-            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: {thread.jump_url}")
 
             original_content = "No original content found."
             if thread.owner.bot:
@@ -279,15 +283,27 @@ class Threads(commands.Cog):
                     original_content = message.content
                     break
 
-            await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>")
-
-            await interaction.channel.send(f"The thread has been moved to a private channel: {new_thread_message.jump_url}")
+            embed = discord.Embed(
+                title="Private Support Thread Created",
+                description=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: {thread.jump_url}\n\nOriginal Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>",
+                color=ELF_GREEN
+            )
+            embed.set_thumbnail(url="https://elfhosted.com/images/logo-green-text.jpg")
 
             try:
-                await thread.edit(locked=True, archived=True)
+                ping_message = await new_thread.send(content=f"{user.mention if user else 'Unknown User'} <@&{self.role2}>")
+                await ping_message.delete()
+                await new_thread.send(embed=embed)
+
+                await interaction.channel.send(f"The thread has been moved to a private channel: {new_thread.jump_url}")
+
+                try:
+                    await thread.edit(locked=True, archived=True)
+                except discord.Forbidden:
+                    mylogger.error("Missing permissions to lock and archive the thread.")
+                    await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
             except discord.Forbidden:
-                mylogger.error("Missing permissions to lock and archive the thread.")
-                await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
+                mylogger.error("Missing permissions to send messages in the thread.")
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
 
@@ -376,10 +392,14 @@ class Threads(commands.Cog):
         embed = discord.Embed(
             title="Ticket Closed",
             description="This ticket has been closed and the channel has been archived.\n\nThank you for contacting support!",
-            color=discord.Color.red()
+            color=RED_COLOR
         )
         await interaction.channel.send(embed=embed)
-        await interaction.channel.edit(archived=True, locked=True)
+
+        try:
+            await interaction.channel.edit(archived=True, locked=True)
+        except discord.Forbidden:
+            mylogger.error("Missing permissions to lock and archive the thread.")
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
