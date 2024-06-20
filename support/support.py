@@ -95,7 +95,10 @@ class RedBotCogSupport(commands.Cog):
 
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
 
+                # Create the thread first
                 thread = await forum_channel.create_thread(name=subject, content=description)
+
+                # Send the message within the thread
                 message = await thread.send(content=description, files=[await a.to_file() for a in message_link.attachments])
 
                 await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
