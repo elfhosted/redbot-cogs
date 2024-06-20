@@ -2,7 +2,8 @@ import discord
 import asyncio
 import re
 import logging
-import tempfile 
+import tempfile
+from datetime import datetime
 from redbot.core import commands, app_commands
 
 mylogger = logging.getLogger('threads')
@@ -400,9 +401,16 @@ class Threads(commands.Cog):
         except Exception as e:
             mylogger.error(f"Failed to send transcript to user: {e}")
 
+        embed = discord.Embed(
+            title=f"Transcript for {interaction.channel.name}",
+            description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n[Open Transcript](attachment://{interaction.channel.name}_transcript.html)",
+            color=0x437820
+        )
+        embed.add_field(name="Participants", value=", ".join([member.mention for member in interaction.channel.members]), inline=False)
+        embed.set_footer(text="Thank you for using our support service!")
+
         await interaction.channel.edit(archived=True, locked=True)
-        await interaction.channel.send("This ticket has been closed and the channel has been archived.")
+        await interaction.channel.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
-
