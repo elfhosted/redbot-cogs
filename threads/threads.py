@@ -69,6 +69,9 @@ class Threads(commands.Cog):
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
+        if thread.parent_id != self.parent_channel_id:
+            return
+
         author_name = f"{thread.owner.name}#{thread.owner.discriminator}" if thread.owner else "Unknown"
         guild_name = thread.guild.name if thread.guild else "Direct Message"
         channel_name = thread.parent.name if isinstance(thread.parent, discord.TextChannel) else "Direct Message"
@@ -179,7 +182,7 @@ class Threads(commands.Cog):
             mylogger.info(f"user_that_needed_help: {user_that_needed_help}")
             mylogger.info(f"user_that_needed_help_id: {user_that_needed_help_id}")
             mylogger.info(f"channel.owner_id: {channel.owner_id}")
-            if channel.parent and channel.parent.id == self.parent_channel_id:
+            if channel.parent and (channel.parent.id == self.parent_channel_id or channel.parent.id == self.private_channel_id):
                 mylogger.info(f"member.id: {member.id}")
                 mylogger.info(f"member.guild_permissions.manage_threads: {member.guild_permissions.manage_threads}")
                 mylogger.info(f"Member roles: {[role.id for role in member.roles]}")
@@ -275,23 +278,23 @@ class Threads(commands.Cog):
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
 
-    @commands.command(name="close-ticket")
+    @app_commands.command(name="close-ticket")
     @commands.has_permissions(manage_channels=True)
-    async def close_ticket(self, ctx: commands.Context):
+    async def close_ticket(self, interaction: discord.Interaction):
         """Close a ticket, send a review message, and create a transcript."""
         
-        # Ensure the command is run in a thread within the specified parent channel
-        if ctx.channel.type != discord.ChannelType.public_thread or ctx.channel.parent_id != self.parent_channel_id:
-            await ctx.send("This command can only be used in ticket threads.")
+        # Ensure the command is run in a thread within the specified parent or private channel
+        if interaction.channel.type != discord.ChannelType.public_thread or (interaction.channel.parent_id != self.parent_channel_id and interaction.channel.parent_id != self.private_channel_id):
+            await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
             return
 
         # Send a review message
         review_message = "Thank you for contacting support! Please leave a review with /review."
-        await ctx.send(review_message)
+        await interaction.channel.send(review_message)
 
         # Create a transcript
         transcript = []
-        async for message in ctx.channel.history(limit=None, oldest_first=True):
+        async for message in interaction.channel.history(limit=None, oldest_first=True):
             timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
             transcript.append(f"<p><b>{timestamp} - {message.author.name}:</b> {message.content}</p>")
         transcript_html = "<html><body>" + "".join(transcript) + "</body></html>"
@@ -300,24 +303,24 @@ class Threads(commands.Cog):
         transcript_channel = self.bot.get_channel(self.transcript_channel_id)
         if transcript_channel:
             await transcript_channel.send(
-                f"Transcript for {ctx.channel.name}",
+                f"Transcript for {interaction.channel.name}",
                 file=discord.File(
                     fp=transcript_html.encode("utf-8"), 
-                    filename=f"{ctx.channel.name}_transcript.html"
+                    filename=f"{interaction.channel.name}_transcript.html"
                 )
             )
 
         # Lock the thread (only allowing read access)
-        overwrites = ctx.channel.overwrites
-        for role in ctx.guild.roles:
+        overwrites = interaction.channel.overwrites
+        for role in interaction.guild.roles:
             if role.permissions.administrator:
                 continue
             overwrites[role] = discord.PermissionOverwrite(send_messages=False)
-        await ctx.channel.edit(overwrites=overwrites)
+        await interaction.channel.edit(overwrites=overwrites)
 
         # Close the thread
-        await ctx.channel.edit(archived=True, locked=True)
-        await ctx.send("This ticket has been closed and the channel has been archived.")
+        await interaction.channel.edit(archived=True, locked=True)
+        await interaction.channel.send("This ticket has been closed and the channel has been archived.")
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
