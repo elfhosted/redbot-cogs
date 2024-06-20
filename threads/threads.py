@@ -127,10 +127,15 @@ class Threads(commands.Cog):
             user_id = thread_owner.id
             user_roles = thread_owner.roles
 
-        try:
-            await thread.edit(name=f"✋┆{username}")
-        except discord.Forbidden:
-            mylogger.error("Missing permissions to edit thread tags.")
+        # Ensure 'available_tags' exists before accessing it
+        if hasattr(thread.parent, 'available_tags'):
+            for tag in thread.parent.available_tags:
+                if tag.name.lower() == "open":
+                    tags.append(tag)
+            try:
+                await thread.edit(name=f"✋┆{username}", applied_tags=tags)
+            except discord.Forbidden:
+                mylogger.error("Missing permissions to edit thread tags.")
 
         try:
             welcome_embed = discord.Embed(
@@ -215,7 +220,8 @@ class Threads(commands.Cog):
                         )
                         await send(embed=close_embed)
 
-                        await channel.edit(name=new_thread_name, locked=True, archived=True)
+                        tags = [tag for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
+                        await channel.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
                     except Exception as e:
                         mylogger.exception("An error occurred while closing the thread", exc_info=e)
                         await send(f"An unexpected error occurred. Please try again later. {e}", ephemeral=True)
@@ -285,12 +291,12 @@ class Threads(commands.Cog):
                         title="New Private Ticket Opened",
                         description=(
                             f"**Opened By:** {interaction.user.mention}\n"
-                            f"**Thread:** {new_thread.jump_url}\n"
-                            f"**Opened On:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}"
+                            f"**Opened On:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                            f"**Thread:** {new_thread.jump_url}"
                         ),
                         color=0x437820
                     )
-                    await notification_channel.send(embed=embed, allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
+                    await notification_channel.send(f"<@&{self.role2}>", embed=embed)
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
@@ -302,7 +308,7 @@ class Threads(commands.Cog):
             await interaction.channel.send(embed=embed)
 
             try:
-                await thread.edit(name=new_thread_name, locked=True, archived=True)
+                await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=[tag for tag in thread.parent.available_tags if tag.name.lower() == "closed"])
             except discord.Forbidden:
                 mylogger.error("Missing permissions to lock and archive the thread.")
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
@@ -332,7 +338,7 @@ class Threads(commands.Cog):
         transcript = []
         async for message in interaction.channel.history(limit=None, oldest_first=True):
             timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            transcript.append(f"<div class='message'><div class='message-author'>{message.author.name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
+            transcript.append(f"<div class='message'><div class='message-author'>{message.author.display_name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
         transcript_html = f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -357,17 +363,17 @@ class Threads(commands.Cog):
                     padding: 10px 0;
                 }}
                 .message:last-child {{
-                    border-bottom: none.
+                    border-bottom: none;
                 }}
                 .message-author {{
-                    font-weight: bold.
+                    font-weight: bold;
                 }}
                 .message-timestamp {{
                     color: #888;
-                    font-size: 0.9em.
+                    font-size: 0.9em;
                 }}
                 .message-content {{
-                    margin-top: 5px.
+                    margin-top: 5px;
                 }}
             </style>
         </head>
@@ -395,11 +401,10 @@ class Threads(commands.Cog):
                 ),
                 color=0x437820
             )
-            embed.add_field(name="Participants", value=", ".join([member.name for member in interaction.channel.members]), inline=False)
-            embed.add_field(name="View Transcript", value=f"[View Transcript](attachment://{interaction.channel.name}_transcript.html)")
+            embed.add_field(name="Participants", value=", ".join([member.display_name for member in interaction.channel.members]), inline=False)
+            embed.add_field(name="Transcript", value=f"[View Transcript](attachment://{interaction.channel.name}_transcript.html)", inline=False)
+
             await transcript_channel.send(embed=embed, file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html"))
-        else:
-            mylogger.error("Transcript channel not found")
 
         try:
             user_mention = re.search(r"<@!?(\d+)>", interaction.channel.name)
@@ -415,7 +420,6 @@ class Threads(commands.Cog):
             mylogger.error(f"Failed to send transcript to user: {e}")
 
         await interaction.channel.edit(archived=True, locked=True)
-        await interaction.response.send_message("This ticket has been closed and the channel has been archived.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
