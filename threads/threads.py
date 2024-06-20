@@ -2,6 +2,7 @@ import discord
 import asyncio
 import re
 import logging
+import tempfile 
 from redbot.core import commands, app_commands
 
 mylogger = logging.getLogger('threads')
