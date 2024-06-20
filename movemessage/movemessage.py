@@ -1,6 +1,7 @@
 import discord
 from redbot.core import commands
 
+# List of allowed role IDs
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
 
 class MoveMessage(commands.Cog):
@@ -23,14 +24,22 @@ class MoveMessage(commands.Cog):
         await self.move_and_notify(ctx, message, target_channel)
 
     @commands.command(name="movemany")
-    async def move_many_messages(self, ctx, start_message_id: int, end_message_id: int, target_channel: discord.TextChannel):
+    async def move_many_messages(self, ctx, message_ids: str, target_channel: discord.TextChannel):
         if not await self.is_allowed(ctx):
             return await ctx.send("You do not have the required role to use this command.")
 
+        try:
+            message_ids = [int(id_str.strip()) for id_str in message_ids.split(",")]
+        except ValueError:
+            return await ctx.send("Invalid message IDs. Please provide a comma-separated list of message IDs.")
+
         messages_to_move = []
-        async for message in ctx.channel.history(after=discord.Object(id=start_message_id), before=discord.Object(id=end_message_id), limit=None):
-            messages_to_move.append(message)
-        messages_to_move = sorted(messages_to_move, key=lambda m: m.id)
+        for message_id in message_ids:
+            try:
+                message = await ctx.channel.fetch_message(message_id)
+                messages_to_move.append(message)
+            except discord.NotFound:
+                await ctx.send(f"Message with ID {message_id} not found.")
 
         for message in messages_to_move:
             await self.move_and_notify(ctx, message, target_channel)
@@ -43,13 +52,12 @@ class MoveMessage(commands.Cog):
 
         moved_message = await target_channel.send(embed=embed)
 
-        note = f"@{message.author.display_name}, your message has been moved here for reference:\n\n{message.content}\n\n[Original Message]({moved_message.jump_url})"
-        await ctx.send(note)
+        note = (
+            f"{message.author.mention}, your message has been moved here for reference:\n\n"
+            f"{message.content}\n\n[Original Message]({moved_message.jump_url})"
+        )
 
-        try:
-            await message.delete()
-        except discord.Forbidden:
-            await ctx.send("I do not have permission to delete the message.")
+        await ctx.send(note)
 
 async def setup(bot):
     await bot.add_cog(MoveMessage(bot))
