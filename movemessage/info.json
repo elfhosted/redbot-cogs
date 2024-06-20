@@ -1,7 +1,7 @@
 {
     "author": ["ElfHosted"],
-    "install_msg": "You have just installed the 'move_message' cog. This cog allows you to move messages to another channel and leaves a note behind.",
-    "name": "move_message",
+    "install_msg": "You have just installed the 'movemessage' cog. This cog allows you to move messages to another channel and leaves a note behind.",
+    "name": "movemessage",
     "short": "Move messages to another channel with a note.",
     "requirements": [],
     "description": "This cog allows you to move messages to another channel and leaves a note behind for reference.",
