@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from redbot.core import commands
 
 # List of allowed role IDs
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
