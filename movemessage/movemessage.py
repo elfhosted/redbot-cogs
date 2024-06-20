@@ -81,14 +81,15 @@ class MoveMessage(commands.Cog):
         if message.attachments:
             embed.set_image(url=message.attachments[0].url)
 
-        moved_message = await target_channel.send(content=message.author.mention, embed=embed)
+        moved_message = await target_channel.send(embed=embed)
 
-        note = (
-            f"{message.author.mention}, your message has been moved to {target_channel.mention} for reference:\n\n"
-            f"[Original Message]({moved_message.jump_url})"
+        note_embed = discord.Embed(
+            description=f"Your message has been moved to {target_channel.mention} for reference:\n\n[Original Message]({moved_message.jump_url})",
+            color=discord.Color.red()
         )
+        note_embed.set_author(name=message.author.display_name, icon_url=avatar_url)
 
-        await ctx.send(note)
+        await ctx.send(content=message.author.mention, embed=note_embed)
 
 async def setup(bot):
     await bot.add_cog(MoveMessage(bot))
