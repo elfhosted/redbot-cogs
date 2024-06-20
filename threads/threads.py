@@ -74,11 +74,11 @@ class Threads(commands.Cog):
         role1 = thread.guild.get_role(self.role1)
         role2 = thread.guild.get_role(self.role2)
 
-        if not (role1):
+        if not role1:
             mylogger.error(f"role1: {self.role1} is missing. Someone may have removed the Test Priority Support role. Aborting now...")
             return
 
-        if not (role2):
+        if not role2:
             mylogger.error(f"role2: {self.role2} is missing. Someone may have removed the Test Support role. Aborting now...")
             return
         
@@ -104,10 +104,15 @@ class Threads(commands.Cog):
             user_id = thread_owner.id
             user_roles = thread_owner.roles
 
-        for tag in thread.parent.available_tags:
-            if tag.name.lower() == "open":
-                tags.append(tag)
+        # Ensure 'available_tags' exists before accessing it
+        if hasattr(thread.parent, 'available_tags'):
+            for tag in thread.parent.available_tags:
+                if tag.name.lower() == "open":
+                    tags.append(tag)
+            try:
                 await thread.edit(applied_tags=tags)
+            except discord.Forbidden:
+                mylogger.error("Missing permissions to edit thread tags.")
 
         await thread.send(
             f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
@@ -183,11 +188,14 @@ class Threads(commands.Cog):
                             f"\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
                             ephemeral=False)
                         tags = [tag for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
-                        await channel.edit(
-                            locked=True,
-                            archived=True,
-                            applied_tags=tags
-                        )
+                        try:
+                            await channel.edit(
+                                locked=True,
+                                archived=True,
+                                applied_tags=tags
+                            )
+                        except discord.Forbidden:
+                            mylogger.error("Missing permissions to edit thread tags.")
                     except Exception as e:
                         mylogger.exception("An error occurred while closing the thread", exc_info=e)
                         await send(
@@ -249,7 +257,11 @@ class Threads(commands.Cog):
 
             await interaction.response.send_message(f"The thread has been moved to a private channel: {new_thread_message.jump_url}", ephemeral=True)
 
-            await thread.edit(locked=True, archived=True)
+            try:
+                await thread.edit(locked=True, archived=True)
+            except discord.Forbidden:
+                mylogger.error("Missing permissions to lock and archive the thread.")
+                await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
 
