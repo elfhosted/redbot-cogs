@@ -16,7 +16,7 @@ class Buttons(discord.ui.View):
         super().__init__(timeout=timeout)
 
     @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="Close Post")
-    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+    async def gray_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
         channel = interaction.channel
         if channel and isinstance(channel, discord.Thread):
             member = interaction.guild.get_member(interaction.user.id)
@@ -117,7 +117,7 @@ class Threads(commands.Cog):
         initial_mention = None
         user_id = None
         user_roles = []
-        if user:
+        if user is not None:
             initial_mention = f"Welcome {user.mention}!\n\n"
             user_id = user.id
             user_roles = user.roles
@@ -132,7 +132,7 @@ class Threads(commands.Cog):
                 if tag.name.lower() == "open":
                     tags.append(tag)
             try:
-                await thread.edit(applied_tags=tags)
+                await thread.edit(name=f"✋┆{username}", applied_tags=tags)
             except discord.Forbidden:
                 mylogger.error("Missing permissions to edit thread tags.")
 
@@ -197,7 +197,7 @@ class Threads(commands.Cog):
 
             user_that_needed_help_id = None
 
-            if username != channel_owner.name:
+            if username != "U_n_k_n_o_w_n":
                 user_obj = discord.utils.get(channel.guild.members, name=username)
                 if user_obj:
                     user_that_needed_help_id = user_obj.id
@@ -253,7 +253,7 @@ class Threads(commands.Cog):
             new_thread_name = f"🔒┆{username}"
 
             if thread.owner.id == self.bot_uid:
-                author_name = match.group(1) if match else "Unknown"
+                author_name = match.group(1) if match else thread.owner.name
                 user = discord.utils.get(thread.guild.members, name=author_name)
             else:
                 user = thread.owner
@@ -359,7 +359,7 @@ class Threads(commands.Cog):
                     font-weight: bold.
                 }}
                 .message-timestamp {{
-                    color: #888.
+                    color: #888;
                     font-size: 0.9em.
                 }}
                 .message-content {{
@@ -405,3 +405,4 @@ class Threads(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
+
