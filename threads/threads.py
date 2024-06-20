@@ -46,17 +46,17 @@ class Threads(commands.Cog):
             self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 720087030750773332  # #general
+            self.general_chat = 1253177629645865083  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
-            self.private_channel_id = 720087030750773332  # #general
+            self.private_channel_id = 1253177629645865083  # #general
             self.transcript_channel_id = 1253171050217476106  #
         elif self.bot.user.id == 1252847131476230194:  # Sparky Jr
             self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 720087030750773332  # #general
+            self.general_chat = 1253177629645865083  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
-            self.private_channel_id = 720087030750773332  # #general
+            self.private_channel_id = 1253177629645865083  # #general
             self.transcript_channel_id = 1253171050217476106  #
         elif self.bot.user.id == 1250431337156837428:  # Spanky
             self.role1 = 1198385945049825322  # Elf Trainees
