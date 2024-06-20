@@ -2,7 +2,7 @@ import discord
 import asyncio
 import re
 import logging
-import tempfile
+import tempfile 
 from redbot.core import commands, app_commands
 
 mylogger = logging.getLogger('threads')
@@ -16,7 +16,7 @@ class Buttons(discord.ui.View):
         super().__init__(timeout=timeout)
 
     @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="Close Post")
-    async def gray_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+    async def close_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
         channel = interaction.channel
         if channel and isinstance(channel, discord.Thread):
             member = interaction.guild.get_member(interaction.user.id)
@@ -110,14 +110,14 @@ class Threads(commands.Cog):
 
         initial_message_content = str(thread)
         match = re.search(r'✋┆(.+)', thread.name)
-        username = match.group(1) if match else "U_n_k_n_o_w_n"
+        username = match.group(1) if match else thread_owner.name
 
         user = discord.utils.get(thread.guild.members, name=username)
 
         initial_mention = None
         user_id = None
         user_roles = []
-        if username != "U_n_k_n_o_w_n" and user is not None:
+        if user:
             initial_mention = f"Welcome {user.mention}!\n\n"
             user_id = user.id
             user_roles = user.roles
@@ -192,12 +192,12 @@ class Threads(commands.Cog):
             channel_owner = channel.owner
 
             match = re.search(r'✋┆(.+)', channel.name)
-            username = match.group(1) if match else "U_n_k_n_o_w_n"
+            username = match.group(1) if match else channel_owner.name
             new_thread_name = f"👍┆{username}"
 
             user_that_needed_help_id = None
 
-            if username != "U_n_k_n_o_w_n":
+            if username != channel_owner.name:
                 user_obj = discord.utils.get(channel.guild.members, name=username)
                 if user_obj:
                     user_that_needed_help_id = user_obj.id
@@ -249,7 +249,7 @@ class Threads(commands.Cog):
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
             match = re.search(r'✋┆(.+)', thread.name)
-            username = match.group(1) if match else "U_n_k_n_o_w_n"
+            username = match.group(1) if match else thread.owner.name
             new_thread_name = f"🔒┆{username}"
 
             if thread.owner.id == self.bot_uid:
@@ -353,17 +353,17 @@ class Threads(commands.Cog):
                     padding: 10px 0;
                 }}
                 .message:last-child {{
-                    border-bottom: none;
+                    border-bottom: none.
                 }}
                 .message-author {{
-                    font-weight: bold;
+                    font-weight: bold.
                 }}
                 .message-timestamp {{
-                    color: #888;
-                    font-size: 0.9em;
+                    color: #888.
+                    font-size: 0.9em.
                 }}
                 .message-content {{
-                    margin-top: 5px;
+                    margin-top: 5px.
                 }}
             </style>
         </head>
@@ -375,6 +375,7 @@ class Threads(commands.Cog):
         </html>
         """
 
+    
         with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as tmp_file:
             tmp_file.write(transcript_html)
             tmp_file_path = tmp_file.name
