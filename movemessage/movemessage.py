@@ -46,15 +46,16 @@ class MoveMessage(commands.Cog):
 
     async def move_and_notify(self, ctx, message, target_channel):
         embed = discord.Embed(description=message.content, color=message.author.color)
-        embed.set_author(name=message.author.display_name, icon_url=message.author.avatar.url)
+        avatar_url = message.author.avatar.url if message.author.avatar else message.author.default_avatar.url
+        embed.set_author(name=message.author.display_name, icon_url=avatar_url)
         embed.timestamp = message.created_at
         embed.add_field(name="Original Message", value=f"[Jump to message]({message.jump_url})")
 
         moved_message = await target_channel.send(embed=embed)
 
         note = (
-            f"{message.author.mention}, your message has been moved here for reference:\n\n"
-            f"{message.content}\n\n[Original Message]({moved_message.jump_url})"
+            f"{message.author.mention}, your message has been moved to {target_channel.mention} for reference:\n\n"
+            f"[Original Message]({moved_message.jump_url})"
         )
 
         await ctx.send(note)
