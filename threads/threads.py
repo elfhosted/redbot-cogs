@@ -46,17 +46,17 @@ class Threads(commands.Cog):
             self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 1253177629645865083  # #general
+            self.general_chat = 1253177629645865083   # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
-            self.private_channel_id = 1253177629645865083  # #general
+            self.private_channel_id = 1253177629645865083    # #general
             self.transcript_channel_id = 1253171050217476106  #
         elif self.bot.user.id == 1252847131476230194:  # Sparky Jr
             self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 1253177629645865083  # #general
+            self.general_chat = 1253177629645865083    # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
-            self.private_channel_id = 1253177629645865083  # #general
+            self.private_channel_id = 1253177629645865083   # #general
             self.transcript_channel_id = 1253171050217476106  #
         elif self.bot.user.id == 1250431337156837428:  # Spanky
             self.role1 = 1198385945049825322  # Elf Trainees
@@ -284,7 +284,12 @@ class Threads(commands.Cog):
         """Close a ticket, send a review message, and create a transcript."""
         
         # Ensure the command is run in a thread within the specified parent or private channel
-        if interaction.channel.type != discord.ChannelType.public_thread or (interaction.channel.parent_id != self.parent_channel_id and interaction.channel.parent_id != self.private_channel_id):
+        if interaction.channel.type != discord.ChannelType.public_thread and interaction.channel.type != discord.ChannelType.private_thread:
+            await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
+            return
+
+        parent_channel = interaction.channel.parent_id
+        if parent_channel != self.parent_channel_id and parent_channel != self.private_channel_id:
             await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
             return
 
@@ -296,8 +301,52 @@ class Threads(commands.Cog):
         transcript = []
         async for message in interaction.channel.history(limit=None, oldest_first=True):
             timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            transcript.append(f"<p><b>{timestamp} - {message.author.name}:</b> {message.content}</p>")
-        transcript_html = "<html><body>" + "".join(transcript) + "</body></html>"
+            transcript.append(f"<div class='message'><div class='message-author'>{message.author.name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
+        transcript_html = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Transcript</title>
+            <style>
+                body {{
+                    font-family: Arial, sans-serif;
+                    margin: 20px;
+                    background-color: #f4f4f4;
+                }}
+                .transcript-container {{
+                    background-color: #fff;
+                    border-radius: 5px;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                    padding: 20px;
+                }}
+                .message {{
+                    border-bottom: 1px solid #ddd;
+                    padding: 10px 0;
+                }}
+                .message:last-child {{
+                    border-bottom: none;
+                }}
+                .message-author {{
+                    font-weight: bold;
+                }}
+                .message-timestamp {{
+                    color: #888;
+                    font-size: 0.9em;
+                }}
+                .message-content {{
+                    margin-top: 5px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="transcript-container">
+                {''.join(transcript)}
+            </div>
+        </body>
+        </html>
+        """
 
         # Send the transcript to the transcript channel as an HTML file
         transcript_channel = self.bot.get_channel(self.transcript_channel_id)
