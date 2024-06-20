@@ -18,6 +18,12 @@ class RedBotCogSupport(commands.Cog):
     @app_commands.describe(message_link="The discord message link or ID you want to create a new elf-support forum post.")
     async def support(self, ctx, message_link: str = None):
         try:
+            # Check if the invoker has the allowed role
+            invoker_has_allowed_role = any(role.id in ALLOWED_ROLE_IDS for role in ctx.author.roles)
+            if not invoker_has_allowed_role:
+                await ctx.send("You don't have permission to use this command.")
+                return
+
             if message_link:
                 message_id = int(message_link.split('/')[-1]) if '/' in message_link else int(message_link)
                 try:
@@ -55,9 +61,6 @@ class RedBotCogSupport(commands.Cog):
             mylogger.info(f"Invoker: {invoker_display_name} ({invoker_username}), Roles: {ctx.author.roles}")
             mylogger.info(f"message_link.author: {message_link.author}")
             mylogger.info(f"self.bot.user: {self.bot.user}")
-
-            invoker_has_allowed_role = any(role.id in ALLOWED_ROLE_IDS for role in ctx.author.roles)
-            mylogger.info(f"Has allowed role: {invoker_has_allowed_role}")
 
             if not (invoker_has_allowed_role or message_link.author == ctx.author):
                 await ctx.send("You don't have permission to use this command or the specified message is not yours.")
@@ -98,3 +101,6 @@ class RedBotCogSupport(commands.Cog):
         except Exception as e:
             mylogger.exception('An error occurred during message processing:', exc_info=e)
             await ctx.send("An error occurred while processing your request.")
+
+def setup(bot):
+    bot.add_cog(RedBotCogSupport(bot))
