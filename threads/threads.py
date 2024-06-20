@@ -40,6 +40,7 @@ class Threads(commands.Cog):
         self.general_chat = None
         self.parent_channel_id = None
         self.private_channel_id = None
+        self.transcript_channel_id = None
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
             self.role1 = 1252431218025431041  # Test Priority Support
@@ -48,6 +49,7 @@ class Threads(commands.Cog):
             self.general_chat = 720087030750773332  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
             self.private_channel_id = 720087030750773332  # #general
+            self.transcript_channel_id = 1253171050217476106  #
         elif self.bot.user.id == 1252847131476230194:  # Sparky Jr
             self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
@@ -55,6 +57,7 @@ class Threads(commands.Cog):
             self.general_chat = 720087030750773332  # #general
             self.parent_channel_id = 1252251752397537291  # #test-elf-support
             self.private_channel_id = 720087030750773332  # #general
+            self.transcript_channel_id = 1253171050217476106  #
         elif self.bot.user.id == 1250431337156837428:  # Spanky
             self.role1 = 1198385945049825322  # Elf Trainees
             self.role2 = 1198381095553617922  # ElfVenger
@@ -62,6 +65,7 @@ class Threads(commands.Cog):
             self.general_chat = 1118645576884572303  # #elf-friends
             self.parent_channel_id = 1245513340176961606  # #elf-support
             self.private_channel_id = 1118645576884572303  # #elf-friends
+            self.transcript_channel_id = 123456789012345678  # not setup
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
@@ -95,7 +99,9 @@ class Threads(commands.Cog):
         user = discord.utils.get(thread.guild.members, name=username)
 
         initial_mention = None
-        if username != "U_n_k_n_o_w_n":
+        user_id = None
+        user_roles = []
+        if username != "U_n_k_n_o_w_n" and user is not None:
             initial_mention = f"Welcome {user.mention}!\n\n"
             user_id = user.id
             user_roles = user.roles
@@ -114,15 +120,18 @@ class Threads(commands.Cog):
             except discord.Forbidden:
                 mylogger.error("Missing permissions to edit thread tags.")
 
-        await thread.send(
-            f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
-            allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user]), view=Buttons(self, bot_role.id, user_id))
-        message = await thread.send(
-            "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
         try:
-            await message.pin(reason="Makes it easier to close the post.")
+            await thread.send(
+                f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
+                allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user] if user else []), view=Buttons(self, bot_role.id, user_id))
+            message = await thread.send(
+                "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
+            try:
+                await message.pin(reason="Makes it easier to close the post.")
+            except discord.Forbidden:
+                mylogger.error("Missing permissions to pin messages.")
         except discord.Forbidden:
-            mylogger.error("Missing permissions to pin messages.")
+            mylogger.error("Missing permissions to send messages in the thread.")
 
     @app_commands.command(name="close")
     async def close(self, interaction: discord.Interaction):
@@ -216,6 +225,7 @@ class Threads(commands.Cog):
         else:
             await send(f"This command can only be used in a thread.", ephemeral=True)
 
+
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
         role2 = interaction.guild.get_role(self.role2)
@@ -255,7 +265,7 @@ class Threads(commands.Cog):
 
             await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>")
 
-            await interaction.response.send_message(f"The thread has been moved to a private channel: {new_thread_message.jump_url}", ephemeral=True)
+            await interaction.channel.send(f"The thread has been moved to a private channel: {new_thread_message.jump_url}")
 
             try:
                 await thread.edit(locked=True, archived=True)
@@ -264,6 +274,50 @@ class Threads(commands.Cog):
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
+
+    @commands.command(name="close-ticket")
+    @commands.has_permissions(manage_channels=True)
+    async def close_ticket(self, ctx: commands.Context):
+        """Close a ticket, send a review message, and create a transcript."""
+        
+        # Ensure the command is run in a thread within the specified parent channel
+        if ctx.channel.type != discord.ChannelType.public_thread or ctx.channel.parent_id != self.parent_channel_id:
+            await ctx.send("This command can only be used in ticket threads.")
+            return
+
+        # Send a review message
+        review_message = "Thank you for contacting support! Please leave a review with /review."
+        await ctx.send(review_message)
+
+        # Create a transcript
+        transcript = []
+        async for message in ctx.channel.history(limit=None, oldest_first=True):
+            timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            transcript.append(f"<p><b>{timestamp} - {message.author.name}:</b> {message.content}</p>")
+        transcript_html = "<html><body>" + "".join(transcript) + "</body></html>"
+
+        # Send the transcript to the transcript channel as an HTML file
+        transcript_channel = self.bot.get_channel(self.transcript_channel_id)
+        if transcript_channel:
+            await transcript_channel.send(
+                f"Transcript for {ctx.channel.name}",
+                file=discord.File(
+                    fp=transcript_html.encode("utf-8"), 
+                    filename=f"{ctx.channel.name}_transcript.html"
+                )
+            )
+
+        # Lock the thread (only allowing read access)
+        overwrites = ctx.channel.overwrites
+        for role in ctx.guild.roles:
+            if role.permissions.administrator:
+                continue
+            overwrites[role] = discord.PermissionOverwrite(send_messages=False)
+        await ctx.channel.edit(overwrites=overwrites)
+
+        # Close the thread
+        await ctx.channel.edit(archived=True, locked=True)
+        await ctx.send("This ticket has been closed and the channel has been archived.")
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
