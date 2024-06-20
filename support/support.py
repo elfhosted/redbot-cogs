@@ -1,6 +1,5 @@
 import discord
 import logging
-import asyncio
 from redbot.core import commands, app_commands
 
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
@@ -89,25 +88,24 @@ class RedBotCogSupport(commands.Cog):
                     return await ctx.send(f'Could not find a channel with ID {forum_channel_id}.')
 
                 subject = f"✋ - {message_link.author.name}"
-                
+              
                 if len(subject) > 100:
                     subject = subject[:97] + "..."
                 mylogger.info(f"Thread subject: {subject} (length: {len(subject)})")
 
                 description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
                 
+    
                 if len(description) < 100:
                     description += "\n" + "-" * (100 - len(description))
                 mylogger.info(f"Thread description: {description} (length: {len(description)})")
 
-                thread = await forum_channel.create_thread(name=subject, content=description)
+         
+                thread, message = await forum_channel.create_thread(name=subject, content=description, files=[await a.to_file() for a in message_link.attachments])
 
-                if message_link.attachments:
-                    await thread.send(files=[await a.to_file() for a in message_link.attachments])
+                await message_link.delete()
 
-                await asyncio.sleep(5)
-
-                await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {thread.jump_url} by {invoker_display_name}")
+                await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
 
