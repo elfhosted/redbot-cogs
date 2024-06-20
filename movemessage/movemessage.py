@@ -81,7 +81,7 @@ class MoveMessage(commands.Cog):
         if message.attachments:
             embed.set_image(url=message.attachments[0].url)
 
-        moved_message = await target_channel.send(embed=embed)
+        moved_message = await target_channel.send(content=message.author.mention, embed=embed)
 
         note = (
             f"{message.author.mention}, your message has been moved to {target_channel.mention} for reference:\n\n"
@@ -89,7 +89,6 @@ class MoveMessage(commands.Cog):
         )
 
         await ctx.send(note)
-        await ctx.send(message.author.mention)
 
 async def setup(bot):
     await bot.add_cog(MoveMessage(bot))
