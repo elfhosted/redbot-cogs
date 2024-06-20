@@ -289,14 +289,13 @@ class Threads(commands.Cog):
                 if notification_channel:
                     embed = discord.Embed(
                         title="New Private Ticket Opened",
-                        description=(
-                            f"**Opened By:** {interaction.user.mention}\n"
-                            f"**Opened On:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                            f"**Thread:** {new_thread.jump_url}"
-                        ),
-                        color=0x437820
+                        description=f"[Jump to the ticket]({new_thread.jump_url})",
+                        color=0x437820,
+                        timestamp=datetime.now()
                     )
-                    await notification_channel.send(f"<@&{self.role2}>", embed=embed)
+                    embed.add_field(name="Opened By", value=interaction.user.mention, inline=True)
+                    embed.add_field(name="Thread", value=f"{new_thread.name}", inline=True)
+                    await notification_channel.send(content=f"<@&{ticketrole.id}>", embed=embed, allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
@@ -338,7 +337,7 @@ class Threads(commands.Cog):
         transcript = []
         async for message in interaction.channel.history(limit=None, oldest_first=True):
             timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            transcript.append(f"<div class='message'><div class='message-author'>{message.author.display_name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
+            transcript.append(f"<div class='message'><div class='message-author'>{message.author.name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
         transcript_html = f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -393,16 +392,11 @@ class Threads(commands.Cog):
         if transcript_channel:
             embed = discord.Embed(
                 title=f"Transcript for {interaction.channel.name}",
-                description=(
-                    f"**Ticket ID:** {interaction.channel.id}\n"
-                    f"**Channel Name:** {interaction.channel.name}\n"
-                    f"**Closed By:** {interaction.user.mention}\n"
-                    f"**Closed On:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                ),
+                description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n[Open Transcript](attachment://{interaction.channel.name}_transcript.html)",
                 color=0x437820
             )
-            embed.add_field(name="Participants", value=", ".join([member.display_name for member in interaction.channel.members]), inline=False)
-            embed.add_field(name="Transcript", value=f"[View Transcript](attachment://{interaction.channel.name}_transcript.html)", inline=False)
+            embed.add_field(name="Participants", value=", ".join([member.name for member in interaction.channel.members]), inline=False)
+            embed.set_footer(text="Thank you for using our support service!")
 
             await transcript_channel.send(embed=embed, file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html"))
 
@@ -420,6 +414,7 @@ class Threads(commands.Cog):
             mylogger.error(f"Failed to send transcript to user: {e}")
 
         await interaction.channel.edit(archived=True, locked=True)
+        await interaction.channel.send("This ticket has been closed and the channel has been archived.")
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
