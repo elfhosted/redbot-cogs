@@ -1,12 +1,12 @@
 import discord
 import logging
+import asyncio
 from redbot.core import commands, app_commands
 
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
 
-# Create logger
 mylogger = logging.getLogger('test_support')
-mylogger.setLevel(logging.DEBUG)  # Set the logging level to DEBUG
+mylogger.setLevel(logging.DEBUG)  
 
 class RedBotCogSupport(commands.Cog):
     def __init__(self, bot):
@@ -73,37 +73,41 @@ class RedBotCogSupport(commands.Cog):
 
                 forum_channel_id = None
                 guild_id = None
+                elf_venger = None
                 if self.bot_uid == 1250781032756674641:
                     forum_channel_id = 1252251752397537291
                     guild_id = 720087029991473184
+                    elf_venger = 1252252269790105721
                 elif self.bot_uid == 1252847131476230194:
                     forum_channel_id = 1252251752397537291
                     guild_id = 720087029991473184 
+                    elf_venger = 1252252269790105721
                 elif self.bot_uid == 1250431337156837428:
                     forum_channel_id = 1245513340176961606
                     guild_id = 396055506072109067
+                    elf_venger = 1198381095553617922
 
                 forum_channel = self.bot.get_channel(forum_channel_id)
                 if not forum_channel:
                     return await ctx.send(f'Could not find a channel with ID {forum_channel_id}.')
 
-                subject = f"✋ - {message_link.author.name}"
-              
+                subject = f"✋┆{message_link.author.name}"
+                
                 if len(subject) > 100:
                     subject = subject[:97] + "..."
                 mylogger.info(f"Thread subject: {subject} (length: {len(subject)})")
 
-                description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
+                description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)\n\n<@&{elf_venger}>"
                 
-    
+                
                 if len(description) < 100:
                     description += "\n" + "-" * (100 - len(description))
                 mylogger.info(f"Thread description: {description} (length: {len(description)})")
 
-         
                 thread, message = await forum_channel.create_thread(name=subject, content=description, files=[await a.to_file() for a in message_link.attachments])
 
                 await message_link.delete()
+                await asyncio.sleep(3)
 
                 await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
             else:

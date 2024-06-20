@@ -2,7 +2,7 @@ import discord
 import asyncio
 import re
 import logging
-import tempfile 
+import tempfile
 from redbot.core import commands, app_commands
 
 mylogger = logging.getLogger('threads')
@@ -109,7 +109,7 @@ class Threads(commands.Cog):
         tags = []
 
         initial_message_content = str(thread)
-        match = re.search(r'✋ - (.+)', thread.name)
+        match = re.search(r'✋┆(.+)', thread.name)
         username = match.group(1) if match else "U_n_k_n_o_w_n"
 
         user = discord.utils.get(thread.guild.members, name=username)
@@ -191,9 +191,9 @@ class Threads(commands.Cog):
         if isinstance(channel, discord.Thread):
             channel_owner = channel.owner
 
-            match = re.search(r'✋ - (.+)', channel.name)
+            match = re.search(r'✋┆(.+)', channel.name)
             username = match.group(1) if match else "U_n_k_n_o_w_n"
-            new_thread_name = f"👍 - {username}"
+            new_thread_name = f"👍┆{username}"
 
             user_that_needed_help_id = None
 
@@ -248,9 +248,9 @@ class Threads(commands.Cog):
     async def _make_private(self, interaction):
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
-            match = re.search(r'✋ - (.+)', thread.name)
+            match = re.search(r'✋┆(.+)', thread.name)
             username = match.group(1) if match else "U_n_k_n_o_w_n"
-            new_thread_name = f"🔒 - {username}"
+            new_thread_name = f"🔒┆{username}"
 
             if thread.owner.id == self.bot_uid:
                 author_name = match.group(1) if match else "Unknown"
@@ -346,24 +346,24 @@ class Threads(commands.Cog):
                     background-color: #fff;
                     border-radius: 5px;
                     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                    padding: 20px.
+                    padding: 20px;
                 }}
                 .message {{
                     border-bottom: 1px solid #ddd;
-                    padding: 10px 0.
+                    padding: 10px 0;
                 }}
                 .message:last-child {{
-                    border-bottom: none.
+                    border-bottom: none;
                 }}
                 .message-author {{
-                    font-weight: bold.
+                    font-weight: bold;
                 }}
                 .message-timestamp {{
                     color: #888;
-                    font-size: 0.9em.
+                    font-size: 0.9em;
                 }}
                 .message-content {{
-                    margin-top: 5px.
+                    margin-top: 5px;
                 }}
             </style>
         </head>
@@ -375,7 +375,6 @@ class Threads(commands.Cog):
         </html>
         """
 
-    
         with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as tmp_file:
             tmp_file.write(transcript_html)
             tmp_file_path = tmp_file.name
