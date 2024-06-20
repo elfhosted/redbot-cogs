@@ -108,7 +108,7 @@ class Threads(commands.Cog):
         tags = []
 
         initial_message_content = str(thread)
-        match = re.search(r'\(([^)]+)\)', thread.name)
+        match = re.search(r'✋ - (.+)', thread.name)
         username = match.group(1) if match else "U_n_k_n_o_w_n"
 
         user = discord.utils.get(thread.guild.members, name=username)
@@ -179,8 +179,8 @@ class Threads(commands.Cog):
 
             user_that_needed_help_id = None
 
-            if user_that_needed_help and user_that_needed_help != "U_n_k_n_o_w_n":
-                user_obj = discord.utils.get(channel.guild.members, name=user_that_needed_help)
+            if username and username != "U_n_k_n_o_w_n":
+                user_obj = discord.utils.get(channel.guild.members, name=username)
                 if user_obj:
                     user_that_needed_help_id = user_obj.id
 
@@ -189,7 +189,7 @@ class Threads(commands.Cog):
             mylogger.info(f"channel.parent: {channel.parent}")
             mylogger.info(f"channel.parent.id: {channel.parent.id}")
             mylogger.info(f"self.parent_channel_id: {self.parent_channel_id}")
-            mylogger.info(f"user_that_needed_help: {user_that_needed_help}")
+            mylogger.info(f"user_that_needed_help: {username}")
             mylogger.info(f"user_that_needed_help_id: {user_that_needed_help_id}")
             mylogger.info(f"channel.owner_id: {channel.owner_id}")
             if channel.parent and (channel.parent.id == self.parent_channel_id or channel.parent.id == self.private_channel_id):
