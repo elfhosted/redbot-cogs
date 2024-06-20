@@ -88,6 +88,7 @@ class RedBotCogSupport(commands.Cog):
                     return await ctx.send(f'Could not find a channel with ID {forum_channel_id}.')
 
                 subject = f"✋ - {message_link.author.name}"
+                
                 if len(subject) > 100:
                     subject = subject[:97] + "..."
                 mylogger.info(f"Thread subject: {subject} (length: {len(subject)})")
@@ -98,11 +99,12 @@ class RedBotCogSupport(commands.Cog):
                     description += "\n" + "-" * (100 - len(description))
                 mylogger.info(f"Thread description: {description} (length: {len(description)})")
 
-                thread = await forum_channel.create_thread(name=subject)
-                
-                message = await thread.send(content=description, files=[await a.to_file() for a in message_link.attachments])
+                thread = await forum_channel.create_thread(name=subject, content=description)
 
-                await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {message.jump_url} by {invoker_display_name}")
+                if message_link.attachments:
+                    await thread.send(files=[await a.to_file() for a in message_link.attachments])
+
+                await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {thread.jump_url} by {invoker_display_name}")
             else:
                 await ctx.send("The specified message is not associated with a guild member. Aborting...")
 
