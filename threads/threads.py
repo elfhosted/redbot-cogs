@@ -295,7 +295,7 @@ class Threads(commands.Cog):
             return
 
         # Send a review message
-        review_message = "Thank you for contacting support! Please leave a review with /review."
+        review_message = "Thank you for contacting support! Please leave a review with `/review`."
         await interaction.channel.send(review_message)
 
         # Create a transcript
@@ -360,13 +360,6 @@ class Threads(commands.Cog):
                 f"Transcript for {interaction.channel.name}",
                 file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
             )
-
-        overwrites = interaction.channel.overwrites
-        for role in interaction.guild.roles:
-            if role.permissions.administrator:
-                continue
-            overwrites[role] = discord.PermissionOverwrite(send_messages=False)
-        await interaction.channel.edit(overwrites=overwrites)
 
         await interaction.channel.edit(archived=True, locked=True)
         await interaction.channel.send("This ticket has been closed and the channel has been archived.")
