@@ -59,6 +59,7 @@ class MoveMessage(commands.Cog):
         )
 
         await ctx.send(note)
+        await ctx.send(message.author.mention)
 
 async def setup(bot):
     await bot.add_cog(MoveMessage(bot))
