@@ -46,6 +46,7 @@ class Threads(commands.Cog):
         self.parent_channel_id = None
         self.private_channel_id = None
         self.transcript_channel_id = None
+        self.support_notify = None
         self.ticket_support = None
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
@@ -136,17 +137,37 @@ class Threads(commands.Cog):
                 mylogger.error("Missing permissions to edit thread tags.")
 
         try:
-            await thread.send(
-                f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` or press the button below if you want to switch this topic to private mode.",
-                allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user] if user else []), view=Buttons(self, bot_role.id, user_id))
-            message = await thread.send(
-                "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
+            welcome_embed = discord.Embed(
+                title="Welcome to the Support Thread!",
+                description=(
+                    f"{initial_mention}This thread is primarily for community support from your fellow elves, "
+                    f"but the <@&{self.role2}>s have been pinged and may assist when they are available.\n\n"
+                    f"Please ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. "
+                    f"Type `/private` or press the button below if you want to switch this topic to private mode."
+                ),
+                color=0x437820
+            )
+            welcome_embed.set_thumbnail(url="https://elfhosted.com/images/logo-green-text.jpg")
+            await thread.send(embed=welcome_embed, view=Buttons(self, bot_role.id, user_id))
+
+            close_embed = discord.Embed(
+                title="Close Ticket",
+                description="You can press the \"Close Post\" button above or type `/close` at any time to close this post.",
+                color=0x437820
+            )
+            message = await thread.send(embed=close_embed)
+
             try:
                 await message.pin(reason="Makes it easier to close the post.")
             except discord.Forbidden:
                 mylogger.error("Missing permissions to pin messages.")
         except discord.Forbidden:
             mylogger.error("Missing permissions to send messages in the thread.")
+
+        # Pinging roles and users, then deleting the ping message
+        ping_message = await thread.send(f"<@&{self.role2}> {initial_mention}")
+        await asyncio.sleep(1)
+        await ping_message.delete()
 
     @app_commands.command(name="close")
     async def close(self, interaction: discord.Interaction):
@@ -169,9 +190,6 @@ class Threads(commands.Cog):
 
         if isinstance(channel, discord.Thread):
             channel_owner = channel.owner
-            initial_message_content = str(channel)
-
-            mylogger.info(f"initial_message_content: {initial_message_content}")
 
             match = re.search(r'✋ - (.+)', channel.name)
             username = match.group(1) if match else "U_n_k_n_o_w_n"
@@ -179,72 +197,48 @@ class Threads(commands.Cog):
 
             user_that_needed_help_id = None
 
-            if username and username != "U_n_k_n_o_w_n":
+            if username != "U_n_k_n_o_w_n":
                 user_obj = discord.utils.get(channel.guild.members, name=username)
                 if user_obj:
                     user_that_needed_help_id = user_obj.id
 
-            mylogger.info(f"channel: {channel}")
-            mylogger.info(f"channel_owner: {channel_owner}")
-            mylogger.info(f"channel.parent: {channel.parent}")
-            mylogger.info(f"channel.parent.id: {channel.parent.id}")
-            mylogger.info(f"self.parent_channel_id: {self.parent_channel_id}")
-            mylogger.info(f"user_that_needed_help: {username}")
-            mylogger.info(f"user_that_needed_help_id: {user_that_needed_help_id}")
-            mylogger.info(f"channel.owner_id: {channel.owner_id}")
             if channel.parent and (channel.parent.id == self.parent_channel_id or channel.parent.id == self.private_channel_id):
-                mylogger.info(f"member.id: {member.id}")
-                mylogger.info(f"member.guild_permissions.manage_threads: {member.guild_permissions.manage_threads}")
-                mylogger.info(f"Member roles: {[role.id for role in member.roles]}")
-                mylogger.info(f"Role2 ID: {self.role2}")
                 if member is None:
-                    await send(
-                        f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
+                    await send(f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                     return
 
                 if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.role2 in [role.id for role in member.roles]:
-                    mylogger.info(f"User {member.name} has permissions to close the thread directly.")
                     try:
-                        await send(
-                            f"This post has been marked as Resolved and has now been closed."
-                            f"\n\nYou cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>.",
-                            ephemeral=False)
+                        close_embed = discord.Embed(
+                            title="Ticket Closed",
+                            description=(
+                                f"This post has been marked as Resolved and has now been closed.\n\n"
+                                f"You cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>."
+                            ),
+                            color=0xff0000
+                        )
+                        await send(embed=close_embed)
+
                         tags = [tag for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
-                        try:
-                            await channel.edit(
-                                name=new_thread_name,
-                                locked=True,
-                                archived=True,
-                                applied_tags=tags
-                            )
-                        except discord.Forbidden:
-                            mylogger.error("Missing permissions to edit thread tags.")
+                        await channel.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
                     except Exception as e:
                         mylogger.exception("An error occurred while closing the thread", exc_info=e)
-                        await send(
-                            f"An unexpected error occurred. Please try again later. {e}", ephemeral=True)
-                    except discord.Forbidden:
-                        await send(
-                            f"I don't have the necessary permissions to close and lock the thread.", ephemeral=True)
-                    except discord.HTTPException:
-                        await send(
-                            f"An error occurred while attempting to close and lock the thread.", ephemeral=True)
+                        await send(f"An unexpected error occurred. Please try again later. {e}", ephemeral=True)
                 else:
-                    mylogger.info(f"User {member.name} does not have the required permissions to close the thread directly.")
                     await send(
                         f"Hello {channel_owner.mention}, a user has suggested that this thread has been resolved and can be closed."
-                        f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread.")
+                        f"\n\nPlease confirm that you are happy to close this thread by typing `/close` or by pressing the Close Post button which is pinned to this thread."
+                    )
             else:
                 await send(f"This command can only be used in a thread.", ephemeral=True)
         else:
             await send(f"This command can only be used in a thread.", ephemeral=True)
 
-
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
         role2 = interaction.guild.get_role(self.role2)
         ticketrole = interaction.guild.get_role(self.ticket_support)
-        
+
         if role2 not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
@@ -296,7 +290,12 @@ class Threads(commands.Cog):
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
-            await interaction.channel.send(f"The thread has been moved to a private channel: {new_thread_message.jump_url}")
+            embed = discord.Embed(
+                title="Thread Moved to Private Channel",
+                description=f"The thread has been moved to a private channel: {new_thread.jump_url}",
+                color=0x437820
+            )
+            await interaction.channel.send(embed=embed)
 
             try:
                 await thread.edit(name=new_thread_name, locked=True, archived=True)
@@ -354,14 +353,14 @@ class Threads(commands.Cog):
                     padding: 10px 0;
                 }}
                 .message:last-child {{
-                    border-bottom: none;
+                    border-bottom: none.
                 }}
                 .message-author {{
                     font-weight: bold;
                 }}
                 .message-timestamp {{
                     color: #888;
-                    font-size: 0.9em;
+                    font-size: 0.9em.
                 }}
                 .message-content {{
                     margin-top: 5px;
