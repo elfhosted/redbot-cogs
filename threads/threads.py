@@ -84,41 +84,40 @@ class Threads(commands.Cog):
         
         bot_role = role2
 
-        if thread.parent_id == self.parent_channel_id:
-            await asyncio.sleep(2)
-            thread_owner = thread.owner
-            tags = []
+        await asyncio.sleep(2)
+        thread_owner = thread.owner
+        tags = []
 
-            initial_message_content = str(thread)
-            match = re.search(r'\(([^)]+)\)', thread.name)
-            username = match.group(1) if match else "U_n_k_n_o_w_n"
+        initial_message_content = str(thread)
+        match = re.search(r'\(([^)]+)\)', thread.name)
+        username = match.group(1) if match else "U_n_k_n_o_w_n"
 
-            user = discord.utils.get(thread.guild.members, name=username)
+        user = discord.utils.get(thread.guild.members, name=username)
 
-            initial_mention = None
-            if username != "U_n_k_n_o_w_n":
-                initial_mention = f"Welcome {user.mention}!\n\n"
-                user_id = user.id
-                user_roles = user.roles
-            else:
-                initial_mention = f"Welcome {thread_owner.mention}!\n\n"
-                user_id = thread_owner.id
-                user_roles = thread_owner.roles
+        initial_mention = None
+        if username != "U_n_k_n_o_w_n":
+            initial_mention = f"Welcome {user.mention}!\n\n"
+            user_id = user.id
+            user_roles = user.roles
+        else:
+            initial_mention = f"Welcome {thread_owner.mention}!\n\n"
+            user_id = thread_owner.id
+            user_roles = thread_owner.roles
 
-            for tag in thread.parent.available_tags:
-                if tag.name.lower() == "open":
-                    tags.append(tag)
-                    await thread.edit(applied_tags=tags)
+        for tag in thread.parent.available_tags:
+            if tag.name.lower() == "open":
+                tags.append(tag)
+                await thread.edit(applied_tags=tags)
 
-            await thread.send(
-                f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
-                allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user]), view=Buttons(self, bot_role.id, user_id))
-            message = await thread.send(
-                "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
-            try:
-                await message.pin(reason="Makes it easier to close the post.")
-            except discord.Forbidden:
-                mylogger.error("Missing permissions to pin messages.")
+        await thread.send(
+            f"{initial_mention}This thread is primarily for community support from your fellow elves, but the <@&{self.role2}>s have been pinged and may assist when they are available. \n\nPlease ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. Type `/private` if you want to switch this topic to private mode.",
+            allowed_mentions=discord.AllowedMentions(roles=[role1, role2], users=[user]), view=Buttons(self, bot_role.id, user_id))
+        message = await thread.send(
+            "You can press the \"Close Post\" button above or type `/close` at any time to close this post.")
+        try:
+            await message.pin(reason="Makes it easier to close the post.")
+        except discord.Forbidden:
+            mylogger.error("Missing permissions to pin messages.")
 
     @app_commands.command(name="close")
     async def close(self, interaction: discord.Interaction):
@@ -222,8 +221,13 @@ class Threads(commands.Cog):
         if isinstance(interaction.channel, discord.Thread):
             thread = interaction.channel
             match = re.search(r'\(([^)]+)\)', thread.name)
-            author_name = match.group(1) if match else "Unknown"
-            user = discord.utils.get(thread.guild.members, name=author_name)
+            if thread.owner.id == self.bot_uid:
+                author_name = match.group(1) if match else "Unknown"
+                user = discord.utils.get(thread.guild.members, name=author_name)
+            else:
+                user = thread.owner
+                author_name = user.name
+
             role2 = thread.guild.get_role(self.role2)
 
             private_channel = self.bot.get_channel(self.private_channel_id)
