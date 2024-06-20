@@ -1,5 +1,6 @@
 import discord
 import logging
+import asyncio
 from redbot.core import commands, app_commands
 
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
@@ -103,6 +104,8 @@ class RedBotCogSupport(commands.Cog):
 
                 if message_link.attachments:
                     await thread.send(files=[await a.to_file() for a in message_link.attachments])
+
+                await asyncio.sleep(5)
 
                 await ctx.send(f"A message by {author_display_name} ({message_link.author.name}) was moved to {thread.jump_url} by {invoker_display_name}")
             else:
