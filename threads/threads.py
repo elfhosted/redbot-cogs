@@ -30,6 +30,7 @@ class Buttons(discord.ui.View):
 
     @discord.ui.button(label="Private Mode", style=discord.ButtonStyle.green, emoji="🔒", custom_id="Private Mode")
     async def private_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+        mylogger.info(f"Private button pressed by {interaction.user.name} (ID: {interaction.user.id})")
         await self.cog._make_private(interaction)
 
 class Threads(commands.Cog):
@@ -240,6 +241,8 @@ class Threads(commands.Cog):
         role2 = interaction.guild.get_role(self.role2)
         ticketrole = interaction.guild.get_role(self.ticket_support)
 
+        mylogger.info(f"private command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
+        
         if role2 not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
@@ -406,7 +409,7 @@ class Threads(commands.Cog):
             description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n[Open Transcript](attachment://{interaction.channel.name}_transcript.html)",
             color=0x437820
         )
-        embed.add_field(name="Participants", value=", ".join([member.mention for member in interaction.channel.members]), inline=False)
+        embed.add_field(name="Participants", value=", ".join([member.user.mention for member in interaction.channel.members]), inline=False)
         embed.set_footer(text="Thank you for using our support service!")
 
         await interaction.channel.edit(archived=True, locked=True)
