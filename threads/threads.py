@@ -300,7 +300,7 @@ class Threads(commands.Cog):
 
             embed = discord.Embed(
                 title="Thread Moved to Private Channel",
-                description=f"The thread has been moved to a private channel: {new_thread.jump_url}",
+                description=f"The thread has been moved to a private channel: [Click here to view]({new_thread.jump_url})",
                 color=0x437820
             )
             await interaction.channel.send(embed=embed)
@@ -346,32 +346,32 @@ class Threads(commands.Cog):
             <title>Transcript</title>
             <style>
                 body {{
-                    font-family: Arial, sans-serif.
-                    margin: 20px.
-                    background-color: #f4f4f4.
+                    font-family: Arial, sans-serif;
+                    margin: 20px;
+                    background-color: #f4f4f4;
                 }}
                 .transcript-container {{
-                    background-color: #fff.
-                    border-radius: 5px.
-                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1).
-                    padding: 20px.
+                    background-color: #fff;
+                    border-radius: 5px;
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                    padding: 20px;
                 }}
                 .message {{
-                    border-bottom: 1px solid #ddd.
-                    padding: 10px 0.
+                    border-bottom: 1px solid #ddd;
+                    padding: 10px 0;
                 }}
                 .message:last-child {{
-                    border-bottom: none.
+                    border-bottom: none;
                 }}
                 .message-author {{
-                    font-weight: bold.
+                    font-weight: bold;
                 }}
                 .message-timestamp {{
-                    color: #888.
-                    font-size: 0.9em.
+                    color: #888;
+                    font-size: 0.9em;
                 }}
                 .message-content {{
-                    margin-top: 5px.
+                    margin-top: 5px;
                 }}
             </style>
         </head>
@@ -383,7 +383,6 @@ class Threads(commands.Cog):
         </html>
         """
 
-    
         with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as tmp_file:
             tmp_file.write(transcript_html)
             tmp_file_path = tmp_file.name
@@ -392,8 +391,14 @@ class Threads(commands.Cog):
         if transcript_channel:
             await transcript_channel.send(
                 f"<@&{self.role2}>", embed=discord.Embed(
-                    title=f"Transcript for {interaction.channel.name}",
-                    description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.",
+                    title="Ticket Transcript",
+                    description=(
+                        f"Transcript for {interaction.channel.name}\n\n"
+                        f"**Closed By:** {interaction.user.mention}\n"
+                        f"**Closed At:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        f"**Participants:** {', '.join([member.mention for member in await interaction.channel.fetch_members()])}\n\n"
+                        f"**Transcript:** [View Transcript](attachment://{tmp_file_path.split('/')[-1]})"
+                    ),
                     color=0x437820
                 ), file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
             )
@@ -412,11 +417,14 @@ class Threads(commands.Cog):
             mylogger.error(f"Failed to send transcript to user: {e}")
 
         embed = discord.Embed(
-            title=f"Transcript for {interaction.channel.name}",
-            description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n[Open Transcript](attachment://{interaction.channel.name}_transcript.html)",
+            title="Ticket Closed",
+            description=(
+                f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n"
+                f"**Transcript:** [View Transcript](attachment://{tmp_file_path.split('/')[-1]})"
+            ),
             color=0x437820
         )
-        embed.add_field(name="Participants", value=", ".join([member.mention for member in interaction.channel.members]), inline=False)
+        embed.add_field(name="Participants", value=", ".join([member.mention for member in await interaction.channel.fetch_members()]), inline=False)
         embed.set_footer(text="Thank you for using our support service!")
 
         await interaction.channel.edit(archived=True, locked=True)
