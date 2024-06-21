@@ -396,7 +396,7 @@ class Threads(commands.Cog):
                         f"Transcript for {interaction.channel.name}\n\n"
                         f"**Closed By:** {interaction.user.mention}\n"
                         f"**Closed At:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        f"**Participants:** {', '.join([member.mention for member in await interaction.channel.fetch_members()])}\n\n"
+                        f"**Participants:** {', '.join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()])}\n\n"
                         f"**Transcript:** [View Transcript](attachment://{tmp_file_path.split('/')[-1]})"
                     ),
                     color=0x437820
@@ -424,7 +424,7 @@ class Threads(commands.Cog):
             ),
             color=0x437820
         )
-        embed.add_field(name="Participants", value=", ".join([member.mention for member in await interaction.channel.fetch_members()]), inline=False)
+        embed.add_field(name="Participants", value=", ".join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()]), inline=False)
         embed.set_footer(text="Thank you for using our support service!")
 
         await interaction.channel.edit(archived=True, locked=True)
