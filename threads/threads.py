@@ -287,16 +287,7 @@ class Threads(commands.Cog):
             try:
                 notification_channel = self.bot.get_channel(self.support_notify)
                 if notification_channel:
-                    embed = discord.Embed(
-                        title="New Private Ticket Opened",
-                        description=(
-                            f"**Thread:** {new_thread.jump_url}\n"
-                            f"**Opened by:** {interaction.user.mention}\n"
-                            f"**Opened at:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
-                        ),
-                        color=0x437820
-                    )
-                    await notification_channel.send(f"<@&{self.ticket_support}>", embed=embed)
+                    await notification_channel.send(f"New private ticket opened: {new_thread.jump_url}", allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
@@ -308,8 +299,7 @@ class Threads(commands.Cog):
             await interaction.channel.send(embed=embed)
 
             try:
-                tags = [tag for tag in thread.parent.available_tags if tag.name.lower() == "closed"]
-                await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
+                await thread.edit(name=new_thread_name, locked=True, archived=True)
             except discord.Forbidden:
                 mylogger.error("Missing permissions to lock and archive the thread.")
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
@@ -393,18 +383,10 @@ class Threads(commands.Cog):
 
         transcript_channel = self.bot.get_channel(self.transcript_channel_id)
         if transcript_channel:
-            embed = discord.Embed(
-                title=f"Transcript for {interaction.channel.name}",
-                description=(
-                    f"**Closed by:** {interaction.user.mention}\n"
-                    f"**Closed at:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
-                    f"**Participants:** {', '.join([member.name for member in interaction.channel.members])}"
-                ),
-                color=0x437820
+            await transcript_channel.send(
+                f"Transcript for {interaction.channel.name}",
+                file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
             )
-            file = discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
-            embed.add_field(name="View Transcript", value=f"[View Transcript](attachment://{interaction.channel.name}_transcript.html)")
-            await transcript_channel.send(embed=embed, file=file)
 
         try:
             user_mention = re.search(r"<@!?(\d+)>", interaction.channel.name)
