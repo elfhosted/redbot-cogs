@@ -42,50 +42,50 @@ class Threads(commands.Cog):
 
     def setup_role_logic(self):
         self.role1 = None
-        self.role2 = None
+        self.elf_venger = None
         self.sponsor = None
-        self.general_chat = None
-        self.parent_channel_id = None
-        self.private_channel_id = None
-        self.transcript_channel_id = None
-        self.support_notify = None
+        self.elf_friends = None
+        self.public_forum_channel = None
+        self.ticket_thread_channel = None
+        self.private_ticket_transcripts = None
+        self.private_ticket_notify_channel = None
         self.ticket_support = None
         self.elf_trainee_id = None
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
             self.role1 = 1252431218025431041  # Test Priority Support
-            self.role2 = 1252252269790105721  # Test-Elf-Venger
+            self.elf_venger = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 1253177629645865083  # #general
-            self.parent_channel_id = 1252251752397537291  # #test-elf-support
-            self.private_channel_id = 1253177629645865083  # #general
-            self.transcript_channel_id = 1253171050217476106  #
-            self.support_notify = 1253214649592315955
+            self.elf_friends = 1253177629645865083  # #general
+            self.public_forum_channel = 1252251752397537291  # #test-elf-support
+            self.ticket_thread_channel = 1253177629645865083  # #general
+            self.private_ticket_transcripts = 1253171050217476106  #
+            self.private_ticket_notify_channel = 1253214649592315955
             self.elf_trainee_id = 1252252269790105721
         elif self.bot.user.id == 1252847131476230194:  # Sparky Jr
             self.role1 = 1252431218025431041  # Test Priority Support
-            self.role2 = 1252252269790105721  # Test-Elf-Venger
+            self.elf_venger = 1252252269790105721  # Test-Elf-Venger
             self.sponsor = 1232124371901087764  # Test Sponsor
-            self.general_chat = 1253177629645865083  # #general
-            self.parent_channel_id = 1252251752397537291  # #test-elf-support
-            self.private_channel_id = 1253177629645865083  # #general
-            self.transcript_channel_id = 1253171050217476106  #
-            self.support_notify = 1253214649592315955
+            self.elf_friends = 1253177629645865083  # #general
+            self.public_forum_channel = 1252251752397537291  # #test-elf-support
+            self.ticket_thread_channel = 1253177629645865083  # #general
+            self.private_ticket_transcripts = 1253171050217476106  #
+            self.private_ticket_notify_channel = 1253214649592315955
             self.elf_trainee_id = 1252252269790105721
         elif self.bot.user.id == 1250431337156837428:  # Spanky
             self.role1 = 1198385945049825322  # Elf Trainees
-            self.role2 = 1198381095553617922  # ElfVenger
+            self.elf_venger = 1198381095553617922  # ElfVenger
             self.sponsor = 862041125706268702  # Sponsor - not used
-            self.general_chat = 1118645576884572303  # #elf-friends
-            self.parent_channel_id = 1245513340176961606  # #elf-support
-            self.private_channel_id = 1253543483868971151  # #private-tickets
-            self.transcript_channel_id = 1253542587613188216  # #elf-venger-transcripts
-            self.support_notify = 1253531682557001810  # #elf-venger-tix
+            self.elf_friends = 1118645576884572303  # #elf-friends
+            self.public_forum_channel = 1245513340176961606  # #elf-support
+            self.ticket_thread_channel = 1253543483868971151  # #private-tickets
+            self.private_ticket_transcripts = 1253542587613188216  # #elf-venger-transcripts
+            self.private_ticket_notify_channel = 1253531682557001810  # #elf-venger-tix
             self.elf_trainee_id = 1198385945049825322 # Elf Trainee Role
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
-        if thread.parent_id != self.parent_channel_id:
+        if thread.parent_id != self.public_forum_channel:
             return
 
         author_name = f"{thread.owner.name}#{thread.owner.discriminator}" if thread.owner else "Unknown"
@@ -95,17 +95,17 @@ class Threads(commands.Cog):
         mylogger.info(f"Threads invoked by {author_name} in {guild_name}/{channel_name} (ID: {thread.guild.id if thread.guild else 'N/A'}/{thread.parent.id if thread.parent else 'N/A'})")
         mylogger.info(f"Processing message: {thread.id}")
         role1 = thread.guild.get_role(self.role1)
-        role2 = thread.guild.get_role(self.role2)
+        elfvenger = thread.guild.get_role(self.elf_venger)
 
         if not role1:
             mylogger.error(f"role1: {self.role1} is missing. Someone may have removed the Test Priority Support role. Aborting now...")
             return
 
-        if not role2:
-            mylogger.error(f"role2: {self.role2} is missing. Someone may have removed the Test Support role. Aborting now...")
+        if not elfvenger:
+            mylogger.error(f"elfvenger: {self.elf_venger} is missing. Someone may have removed the Test Support role. Aborting now...")
             return
         
-        bot_role = role2
+        bot_role = elfvenger
 
         await asyncio.sleep(2)
         thread_owner = thread.owner
@@ -144,7 +144,7 @@ class Threads(commands.Cog):
                 title="Welcome to the Support Thread!",
                 description=(
                     f"{initial_mention}This thread is primarily for community support from your fellow elves, "
-                    f"but the <@&{self.role2}>s have been pinged and may assist when they are available.\n\n"
+                    f"but the <@&{self.elf_venger}>s have been pinged and may assist when they are available.\n\n"
                     f"Please ensure you've reviewed the troubleshooting guide - this is a requirement for subsequent support in this thread. "
                     f"Type `/private` or press the button below if you want to switch this topic to private mode."
                 ),
@@ -159,7 +159,10 @@ class Threads(commands.Cog):
                 color=0x437820
             )
             message = await thread.send(embed=close_embed)
-            await thread.send(f"<@&{self.role2}> <@&{self.elf_trainee_id}> ")
+            await thread.send(
+                content=f"<@&{self.elf_venger}> <@&{self.elf_trainee_id}>",
+                allowed_mentions=discord.AllowedMentions(roles=[thread.guild.get_role(self.elf_venger), thread.guild.get_role(self.elf_trainee_id)])
+            )
 
             try:
                 await message.pin(reason="Makes it easier to close the post.")
@@ -168,11 +171,12 @@ class Threads(commands.Cog):
         except discord.Forbidden:
             mylogger.error("Missing permissions to send messages in the thread.")
 
+
     @app_commands.command(name="close")
     async def close(self, interaction: discord.Interaction):
-        role2 = interaction.guild.get_role(self.role2)
+        elfvenger = interaction.guild.get_role(self.elf_venger)
         mylogger.info(f"close command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
-        if role2 not in interaction.user.roles:
+        if elfvenger not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
         await self._close(interaction)
@@ -201,18 +205,18 @@ class Threads(commands.Cog):
                 if user_obj:
                     user_that_needed_help_id = user_obj.id
 
-            if channel.parent and (channel.parent.id == self.parent_channel_id or channel.parent.id == self.private_channel_id):
+            if channel.parent and (channel.parent.id == self.public_forum_channel or channel.parent.id == self.ticket_thread_channel):
                 if member is None:
                     await send(f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                     return
 
-                if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.role2 in [role.id for role in member.roles]:
+                if member.id == channel.owner_id or member.guild_permissions.manage_threads or user_that_needed_help_id == member.id or self.elf_venger in [role.id for role in member.roles]:
                     try:
                         close_embed = discord.Embed(
                             title="Ticket Closed",
                             description=(
                                 f"This post has been marked as Resolved and has now been closed.\n\n"
-                                f"You cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.general_chat}>."
+                                f"You cannot reopen this thread - you must create a new one or ask an ElfVenger to reopen it in <#{self.elf_friends}>."
                             ),
                             color=0xff0000
                         )
@@ -235,12 +239,12 @@ class Threads(commands.Cog):
 
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
-        role2 = interaction.guild.get_role(self.role2)
+        elfvenger = interaction.guild.get_role(self.elf_venger)
         ticketrole = interaction.guild.get_role(self.ticket_support)
 
         mylogger.info(f"private command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
         
-        if role2 not in interaction.user.roles:
+        if elfvenger not in interaction.user.roles:
             await interaction.response.send_message("You don't have permission to use this command.", ephemeral=True)
             return
 
@@ -260,10 +264,10 @@ class Threads(commands.Cog):
                 user = thread.owner
                 author_name = user.name
 
-            role2 = thread.guild.get_role(self.role2)
+            elfvenger = thread.guild.get_role(self.elf_venger)
             ticketrole = thread.guild.get_role(self.ticket_support)
 
-            private_channel = self.bot.get_channel(self.private_channel_id)
+            private_channel = self.bot.get_channel(self.ticket_thread_channel)
             if not private_channel:
                 await interaction.response.send_message("Could not find the private channel.", ephemeral=True)
                 return
@@ -282,12 +286,12 @@ class Threads(commands.Cog):
                     original_content = message.content
                     break
 
-            await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.role2}>")
+            await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.elf_venger}>")
 
             try:
-                notification_channel = self.bot.get_channel(self.support_notify)
+                notification_channel = self.bot.get_channel(self.private_ticket_notify_channel)
                 if notification_channel:
-                    await notification_channel.send(f"<@&{self.role2}>", embed=discord.Embed(
+                    await notification_channel.send(f"<@&{self.elf_venger}>", embed=discord.Embed(
                         title="New Private Ticket Opened",
                         description=f"A new private ticket has been opened: [Click here to view]({new_thread.jump_url})",
                         color=0x437820
@@ -321,7 +325,7 @@ class Threads(commands.Cog):
             return
 
         parent_channel = interaction.channel.parent_id
-        if parent_channel != self.private_channel_id:
+        if parent_channel != self.ticket_thread_channel:
             await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
             return
 
@@ -384,10 +388,10 @@ class Threads(commands.Cog):
             tmp_file.write(transcript_html)
             tmp_file_path = tmp_file.name
 
-        transcript_channel = self.bot.get_channel(self.transcript_channel_id)
+        transcript_channel = self.bot.get_channel(self.private_ticket_transcripts)
         if transcript_channel:
             await transcript_channel.send(
-                f"<@&{self.role2}>", embed=discord.Embed(
+                f"<@&{self.elf_venger}>", embed=discord.Embed(
                     title="Ticket Transcript",
                     description=(
                         f"Transcript for {interaction.channel.name}\n\n"
