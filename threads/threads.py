@@ -289,15 +289,14 @@ class Threads(commands.Cog):
                 if notification_channel:
                     embed = discord.Embed(
                         title="New Private Ticket Opened",
-                        description=f"Private thread created for {user.mention if user else 'Unknown User'}",
-                        color=0x437820,
-                        timestamp=datetime.utcnow()
+                        description=(
+                            f"**Thread:** {new_thread.jump_url}\n"
+                            f"**Opened by:** {interaction.user.mention}\n"
+                            f"**Opened at:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+                        ),
+                        color=0x437820
                     )
-                    embed.add_field(name="Original Thread", value=f"[Jump to thread]({thread.jump_url})", inline=False)
-                    embed.add_field(name="Private Thread", value=f"[Jump to thread]({new_thread.jump_url})", inline=False)
-                    embed.set_footer(text=f"Opened by {interaction.user.name}")
-
-                    await notification_channel.send(f"<@&{ticketrole.id}>", embed=embed, allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
+                    await notification_channel.send(f"<@&{self.ticket_support}>", embed=embed)
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
@@ -309,7 +308,8 @@ class Threads(commands.Cog):
             await interaction.channel.send(embed=embed)
 
             try:
-                await thread.edit(name=new_thread_name, locked=True, archived=True)
+                tags = [tag for tag in thread.parent.available_tags if tag.name.lower() == "closed"]
+                await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
             except discord.Forbidden:
                 mylogger.error("Missing permissions to lock and archive the thread.")
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
@@ -339,7 +339,7 @@ class Threads(commands.Cog):
         transcript = []
         async for message in interaction.channel.history(limit=None, oldest_first=True):
             timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            transcript.append(f"<div class='message'><div class='message-author'>{message.author.display_name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
+            transcript.append(f"<div class='message'><div class='message-author'>{message.author.name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
         transcript_html = f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -395,13 +395,16 @@ class Threads(commands.Cog):
         if transcript_channel:
             embed = discord.Embed(
                 title=f"Transcript for {interaction.channel.name}",
-                description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n[Open Transcript](attachment://{interaction.channel.name}_transcript.html)",
+                description=(
+                    f"**Closed by:** {interaction.user.mention}\n"
+                    f"**Closed at:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+                    f"**Participants:** {', '.join([member.display_name for member in interaction.channel.members])}"
+                ),
                 color=0x437820
             )
-            embed.add_field(name="Participants", value=", ".join([member.display_name for member in interaction.channel.members]), inline=False)
-            embed.set_footer(text="Thank you for using our support service!")
-
-            await transcript_channel.send(embed=embed, file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html"))
+            file = discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
+            embed.add_field(name="View Transcript", value=f"[View Transcript](attachment://{interaction.channel.name}_transcript.html)")
+            await transcript_channel.send(embed=embed, file=file)
 
         try:
             user_mention = re.search(r"<@!?(\d+)>", interaction.channel.name)
