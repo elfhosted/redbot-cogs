@@ -290,7 +290,11 @@ class Threads(commands.Cog):
             try:
                 notification_channel = self.bot.get_channel(self.support_notify)
                 if notification_channel:
-                    await notification_channel.send(f"<@&{self.role2}> New private ticket opened: {new_thread.jump_url}", allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
+                    await notification_channel.send(f"<@&{self.role2}>", embed=discord.Embed(
+                        title="New Private Ticket Opened",
+                        description=f"A new private ticket has been opened: [Click here to view]({new_thread.jump_url})",
+                        color=0x437820
+                    ), allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
@@ -387,8 +391,11 @@ class Threads(commands.Cog):
         transcript_channel = self.bot.get_channel(self.transcript_channel_id)
         if transcript_channel:
             await transcript_channel.send(
-                f"<@&{self.role2}> Transcript for {interaction.channel.name}",
-                file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
+                f"<@&{self.role2}>", embed=discord.Embed(
+                    title=f"Transcript for {interaction.channel.name}",
+                    description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.",
+                    color=0x437820
+                ), file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
             )
 
         try:
@@ -409,7 +416,7 @@ class Threads(commands.Cog):
             description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n[Open Transcript](attachment://{interaction.channel.name}_transcript.html)",
             color=0x437820
         )
-        embed.add_field(name="Participants", value=", ".join([member.user.mention for member in interaction.channel.members]), inline=False)
+        embed.add_field(name="Participants", value=", ".join([member.mention for member in interaction.channel.members]), inline=False)
         embed.set_footer(text="Thank you for using our support service!")
 
         await interaction.channel.edit(archived=True, locked=True)
