@@ -50,6 +50,7 @@ class Threads(commands.Cog):
         self.transcript_channel_id = None
         self.support_notify = None
         self.ticket_support = None
+        self.elf_trainee_id = None
 
         if self.bot.user.id == 1250781032756674641:  # Sparky
             self.role1 = 1252431218025431041  # Test Priority Support
@@ -60,7 +61,7 @@ class Threads(commands.Cog):
             self.private_channel_id = 1253177629645865083  # #general
             self.transcript_channel_id = 1253171050217476106  #
             self.support_notify = 1253214649592315955
-            self.ticket_support = 1252252269790105721
+            self.elf_trainee_id = 1252252269790105721
         elif self.bot.user.id == 1252847131476230194:  # Sparky Jr
             self.role1 = 1252431218025431041  # Test Priority Support
             self.role2 = 1252252269790105721  # Test-Elf-Venger
@@ -70,7 +71,7 @@ class Threads(commands.Cog):
             self.private_channel_id = 1253177629645865083  # #general
             self.transcript_channel_id = 1253171050217476106  #
             self.support_notify = 1253214649592315955
-            self.ticket_support = 1252252269790105721
+            self.elf_trainee_id = 1252252269790105721
         elif self.bot.user.id == 1250431337156837428:  # Spanky
             self.role1 = 1198385945049825322  # Elf Trainees
             self.role2 = 1198381095553617922  # ElfVenger
@@ -80,7 +81,7 @@ class Threads(commands.Cog):
             self.private_channel_id = 1253543483868971151  # #private-tickets
             self.transcript_channel_id = 1253542587613188216  # #elf-venger-transcripts
             self.support_notify = 1253531682557001810  # #elf-venger-tix
-            self.ticket_support = 1198381095553617922  # elf-vengers (is this the correct usage?)
+            self.elf_trainee_id = 1198385945049825322 # Elf Trainee Role
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):

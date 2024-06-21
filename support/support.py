@@ -78,14 +78,17 @@ class RedBotCogSupport(commands.Cog):
                     forum_channel_id = 1252251752397537291
                     guild_id = 720087029991473184
                     elf_venger = 1252252269790105721
+                    elf_trainee_id = 1252252269790105721 
                 elif self.bot_uid == 1252847131476230194:
                     forum_channel_id = 1252251752397537291
                     guild_id = 720087029991473184 
                     elf_venger = 1252252269790105721
+                    elf_trainee_id = 1252252269790105721 
                 elif self.bot_uid == 1250431337156837428:
                     forum_channel_id = 1245513340176961606
                     guild_id = 396055506072109067
                     elf_venger = 1198381095553617922
+                    elf_trainee_id = 1198385945049825322 # Elf Trainee Role
 
                 forum_channel = self.bot.get_channel(forum_channel_id)
                 if not forum_channel:
@@ -97,7 +100,7 @@ class RedBotCogSupport(commands.Cog):
                     subject = subject[:97] + "..."
                 mylogger.info(f"Thread subject: {subject} (length: {len(subject)})")
 
-                description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)\n\n<@&{elf_venger}>"
+                description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)\n\n<@&{elf_venger}><@&{elf_trainee_id}>"
                 
                 
                 if len(description) < 100:
