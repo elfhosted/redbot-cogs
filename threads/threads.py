@@ -8,6 +8,11 @@ from redbot.core import commands, app_commands
 
 mylogger = logging.getLogger('threads')
 mylogger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+mylogger.addHandler(handler)
 
 class Buttons(discord.ui.View):
     def __init__(self, cog, bot_role_id, user_id, *, timeout=None):
@@ -129,7 +134,6 @@ class Threads(commands.Cog):
             user_id = thread_owner.id
             user_roles = thread_owner.roles
 
-        # Ensure 'available_tags' exists before accessing it
         if hasattr(thread.parent, 'available_tags'):
             for tag in thread.parent.available_tags:
                 if tag.name.lower() == "open":
@@ -171,7 +175,6 @@ class Threads(commands.Cog):
         except discord.Forbidden:
             mylogger.error("Missing permissions to send messages in the thread.")
 
-
     @app_commands.command(name="close")
     async def close(self, interaction: discord.Interaction):
         elfvenger = interaction.guild.get_role(self.elf_venger)
@@ -207,6 +210,7 @@ class Threads(commands.Cog):
 
             if channel.parent and (channel.parent.id == self.public_forum_channel or channel.parent.id == self.ticket_thread_channel):
                 if member is None:
+                    mylogger.error("Member information could not be found.")
                     await send(f"Sorry, I couldn't find your member information. Please try again later.", ephemeral=True)
                     return
 
@@ -269,11 +273,12 @@ class Threads(commands.Cog):
 
             private_channel = self.bot.get_channel(self.ticket_thread_channel)
             if not private_channel:
+                mylogger.error("Private channel could not be found.")
                 await interaction.response.send_message("Could not find the private channel.", ephemeral=True)
                 return
 
             new_thread = await private_channel.create_thread(name=new_thread_name)
-            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: {thread.jump_url}")
+            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: [{thread.name}]({thread.jump_url})")
 
             original_content = "No original content found."
             if thread.owner.bot:
@@ -286,7 +291,7 @@ class Threads(commands.Cog):
                     original_content = message.content
                     break
 
-            await new_thread.send(content=f"Original Message: {original_content}\n\nOpened by {interaction.user.mention} <@&{self.elf_venger}>")
+            await new_thread.send(content=f"**Original Message:** {original_content}\n\n**Opened by:** {interaction.user.mention} <@&{self.elf_venger}>")
 
             try:
                 notification_channel = self.bot.get_channel(self.private_ticket_notify_channel)
@@ -297,7 +302,12 @@ class Threads(commands.Cog):
                 else:
                     await notification_channel.send(f"<@&{self.elf_venger}>", embed=discord.Embed(
                         title="New Private Ticket Opened",
-                        description=f"A new private ticket has been opened: [Click here to view]({new_thread.jump_url})",
+                        description=(
+                            f"**Original Title:** {thread.name}\n\n"
+                            f"**Content:** {original_content}\n\n"
+                            f"**Original Thread:** [View Thread]({thread.jump_url})\n"
+                            f"**Private Thread:** [View Thread]({new_thread.jump_url})"
+                        ),
                         color=0x437820
                     ), allowed_mentions=discord.AllowedMentions(roles=[discord.Object(id=self.elf_venger)]))
             except Exception as e:
@@ -323,118 +333,126 @@ class Threads(commands.Cog):
     @commands.has_permissions(manage_channels=True)
     async def close_ticket(self, interaction: discord.Interaction):
         """Close a ticket, send a review message, and create a transcript."""
-        
-        # Ensure the command is run in a thread within the specified parent or private channel
-        if interaction.channel.type != discord.ChannelType.public_thread and interaction.channel.type != discord.ChannelType.private_thread:
-            await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
-            return
-
-        parent_channel = interaction.channel.parent_id
-        if parent_channel != self.ticket_thread_channel:
-            await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
-            return
-
-        # Send a review message
-        review_message = "Thank you for contacting support! Please leave a review with `/review`."
-        await interaction.channel.send(review_message)
-
-        # Create a transcript
-        transcript = []
-        async for message in interaction.channel.history(limit=None, oldest_first=True):
-            timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            transcript.append(f"<div class='message'><div class='message-author'>{message.author.name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
-        transcript_html = f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Transcript</title>
-            <style>
-                body {{
-                    font-family: Arial, sans-serif;
-                    margin: 20px;
-                    background-color: #f4f4f4;
-                }}
-                .transcript-container {{
-                    background-color: #fff;
-                    border-radius: 5px;
-                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                    padding: 20px;
-                }}
-                .message {{
-                    border-bottom: 1px solid #ddd;
-                    padding: 10px 0;
-                }}
-                .message:last-child {{
-                    border-bottom: none;
-                }}
-                .message-author {{
-                    font-weight: bold;
-                }}
-                .message-timestamp {{
-                    color: #888;
-                    font-size: 0.9em;
-                }}
-                .message-content {{
-                    margin-top: 5px;
-                }}
-            </style>
-        </head>
-        <body>
-            <div class="transcript-container">
-                {''.join(transcript)}
-            </div>
-        </body>
-        </html>
-        """
-
-        with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as tmp_file:
-            tmp_file.write(transcript_html)
-            tmp_file_path = tmp_file.name
-
-        transcript_channel = self.bot.get_channel(self.private_ticket_transcripts)
-        if transcript_channel:
-            await transcript_channel.send(
-                f"<@&{self.elf_venger}>", embed=discord.Embed(
-                    title="Ticket Transcript",
-                    description=(
-                        f"Transcript for {interaction.channel.name}\n\n"
-                        f"**Closed By:** {interaction.user.mention}\n"
-                        f"**Closed At:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        f"**Participants:** {', '.join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()])}\n\n"
-                        f"**Transcript:** [View Transcript](attachment://{tmp_file_path.split('/')[-1]})"
-                    ),
-                    color=0x437820
-                ), file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
-            )
-
         try:
-            user_mention = re.search(r"<@!?(\d+)>", interaction.channel.name)
-            if user_mention:
-                user_id = int(user_mention.group(1))
-                user = interaction.guild.get_member(user_id)
-                if user:
-                    await user.send(
-                        f"Here is the transcript for your ticket: {interaction.channel.name}",
-                        file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
-                    )
+            mylogger.info(f"close_ticket command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
+            
+            # Ensure the command is run in a thread within the specified parent or private channel
+            if interaction.channel.type != discord.ChannelType.public_thread and interaction.channel.type != discord.ChannelType.private_thread:
+                mylogger.error("Command used in an invalid channel type.")
+                await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
+                return
+
+            parent_channel = interaction.channel.parent_id
+            if parent_channel != self.ticket_thread_channel:
+                mylogger.error("Command used in a thread outside the specified parent or private channel.")
+                await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
+                return
+
+            # Send a review message
+            review_message = "Thank you for contacting support! Please leave a review with `/review`."
+            await interaction.channel.send(review_message)
+            mylogger.info("Review message sent successfully.")
+
+            # Create a transcript
+            transcript = []
+            async for message in interaction.channel.history(limit=None, oldest_first=True):
+                timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                transcript.append(f"<div class='message'><div class='message-author'>{message.author.name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
+            transcript_html = f"""
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Transcript</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        margin: 20px;
+                        background-color: #f4f4f4;
+                    }}
+                    .transcript-container {{
+                        background-color: #fff;
+                        border-radius: 5px;
+                        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                        padding: 20px;
+                    }}
+                    .message {{
+                        border-bottom: 1px solid #ddd;
+                        padding: 10px 0;
+                    }}
+                    .message:last-child {{
+                        border-bottom: none;
+                    }}
+                    .message-author {{
+                        font-weight: bold;
+                    }}
+                    .message-timestamp {{
+                        color: #888;
+                        font-size: 0.9em;
+                    }}
+                    .message-content {{
+                        margin-top: 5px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="transcript-container">
+                    {''.join(transcript)}
+                </div>
+            </body>
+            </html>
+            """
+
+            with tempfile.NamedTemporaryFile('w', delete=False, suffix='.html') as tmp_file:
+                tmp_file.write(transcript_html)
+                tmp_file_path = tmp_file.name
+
+            transcript_channel = self.bot.get_channel(self.private_ticket_transcripts)
+            if transcript_channel:
+                await transcript_channel.send(
+                    f"<@&{self.elf_venger}>", embed=discord.Embed(
+                        title="Ticket Transcript",
+                        description=(
+                            f"Transcript for {interaction.channel.name}\n\n"
+                            f"**Closed By:** {interaction.user.mention}\n"
+                            f"**Closed At:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                            f"**Participants:** {', '.join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()])}\n\n"
+                            f"**Transcript:** [View Transcript](attachment://{tmp_file_path.split('/')[-1]})"
+                        ),
+                        color=0x437820
+                    ), file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
+                )
+
+            try:
+                user_mention = re.search(r"<@!?(\d+)>", interaction.channel.name)
+                if user_mention:
+                    user_id = int(user_mention.group(1))
+                    user = interaction.guild.get_member(user_id)
+                    if user:
+                        await user.send(
+                            f"Here is the transcript for your ticket: {interaction.channel.name}",
+                            file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
+                        )
+            except Exception as e:
+                mylogger.error(f"Failed to send transcript to user: {e}")
+
+            embed = discord.Embed(
+                title="Ticket Closed",
+                description=(
+                    f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n"
+                    f"**Transcript:** [View Transcript](attachment://{tmp_file_path.split('/')[-1]})"
+                ),
+                color=0x437820
+            )
+            embed.add_field(name="Participants", value=", ".join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()]), inline=False)
+            embed.set_footer(text="Thank you for using our support service!")
+
+            await interaction.channel.edit(archived=True, locked=True)
+            await interaction.channel.send(embed=embed)
         except Exception as e:
-            mylogger.error(f"Failed to send transcript to user: {e}")
-
-        embed = discord.Embed(
-            title="Ticket Closed",
-            description=(
-                f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n"
-                f"**Transcript:** [View Transcript](attachment://{tmp_file_path.split('/')[-1]})"
-            ),
-            color=0x437820
-        )
-        embed.add_field(name="Participants", value=", ".join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()]), inline=False)
-        embed.set_footer(text="Thank you for using our support service!")
-
-        await interaction.channel.edit(archived=True, locked=True)
-        await interaction.channel.send(embed=embed)
+            mylogger.exception("An error occurred in the close_ticket command", exc_info=e)
+            await interaction.response.send_message("An unexpected error occurred. Please try again later.", ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))

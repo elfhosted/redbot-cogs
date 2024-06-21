@@ -1,25 +1,50 @@
 import discord
 from redbot.core import commands, app_commands, Config
 from discord import ui
+from datetime import datetime
+from typing import Literal
 
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
+COLOR_CHOICES = {
+    "Red": 0xFF0000,
+    "Green": 0x00FF00,
+    "Blue": 0x0000FF,
+    "Yellow": 0xFFFF00,
+    "Default": 0x437820
+}
 
 class CustomEmbedModal(ui.Modal, title="Create Custom Embed"):
-    title = ui.TextInput(label="Title", placeholder="Enter the embed title here", required=True)
-    description = ui.TextInput(label="Description", style=discord.TextStyle.long, placeholder="Enter the embed description here", required=True)
+    title_input = ui.TextInput(label="Title", placeholder="Enter the embed title here", required=True)
+    description_input = ui.TextInput(label="Description", style=discord.TextStyle.long, placeholder="Enter the embed description here", required=True)
+    author_input = ui.TextInput(label="Author", placeholder="Enter the author name", required=False)
+    footer_input = ui.TextInput(label="Footer", placeholder="Enter the footer text", required=False)
+    thumbnail_input = ui.TextInput(label="Thumbnail URL", placeholder="Enter the thumbnail URL", required=False)
+    image_input = ui.TextInput(label="Image URL", placeholder="Enter the image URL", required=False)
 
-    def __init__(self, bot, guild_config, *args, **kwargs):
+    def __init__(self, bot, guild_config, color_choice, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bot = bot
         self.guild_config = guild_config
+        self.color_choice = color_choice
 
     async def on_submit(self, interaction: discord.Interaction):
+        color = COLOR_CHOICES.get(self.color_choice, self.guild_config["default_color"])
+
         embed = discord.Embed(
-            title=self.title.value,
-            description=self.description.value,
-            color=self.guild_config["default_color"]
+            title=self.title_input.value,
+            description=self.description_input.value,
+            color=color,
+            timestamp=datetime.utcnow()
         )
-        embed.set_image(url=self.guild_config["default_image"])
+        embed.set_image(url=self.image_input.value or self.guild_config["default_image"])
+
+        if self.author_input.value:
+            embed.set_author(name=self.author_input.value)
+        if self.footer_input.value:
+            embed.set_footer(text=self.footer_input.value)
+        if self.thumbnail_input.value:
+            embed.set_thumbnail(url=self.thumbnail_input.value)
+
         await interaction.response.send_message(embed=embed)
 
 class CustomEmbed(commands.Cog):
@@ -36,13 +61,15 @@ class CustomEmbed(commands.Cog):
 
     @app_commands.command()
     @app_commands.guild_only()
-    async def createembed(self, interaction: discord.Interaction):
+    @app_commands.describe(color="Choose a color for the embed")
+    @app_commands.choices(color=[app_commands.Choice(name=k, value=k) for k in COLOR_CHOICES.keys()])
+    async def createembed(self, interaction: discord.Interaction, color: Literal["Red", "Green", "Blue", "Yellow", "Default"]):
         """Create a custom embed."""
         if not any(role.id in ALLOWED_ROLE_IDS for role in interaction.user.roles):
             return await interaction.response.send_message("You do not have the required roles to use this command.", ephemeral=True)
 
         guild_config = await self.config.guild(interaction.guild).all()
-        modal = CustomEmbedModal(self.bot, guild_config)
+        modal = CustomEmbedModal(self.bot, guild_config, color)
         await interaction.response.send_modal(modal)
 
     @app_commands.command()
@@ -59,12 +86,32 @@ class CustomEmbed(commands.Cog):
         await self.config.guild(interaction.guild).default_image.set(image_url)
         await interaction.response.send_message("Default embed color and image have been updated.", ephemeral=True)
 
+    @app_commands.context_menu(name="Create Embed from Message")
+    async def create_embed_from_message(self, interaction: discord.Interaction, message: discord.Message):
+        """Create an embed using a message content."""
+        if not any(role.id in ALLOWED_ROLE_IDS for role in interaction.user.roles):
+            return await interaction.response.send_message("You do not have the required roles to use this command.", ephemeral=True)
+
+        guild_config = await self.config.guild(interaction.guild).all()
+
+        embed = discord.Embed(
+            title="Embed from Message",
+            description=message.content,
+            color=guild_config["default_color"],
+            timestamp=datetime.utcnow()
+        )
+        embed.set_image(url=guild_config["default_image"])
+
+        await interaction.response.send_message(embed=embed)
+
 async def setup(bot):
     cog = CustomEmbed(bot)
     bot.add_cog(cog)
     bot.tree.add_command(cog.createembed)
     bot.tree.add_command(cog.setembedconfig)
+    bot.tree.add_command(cog.create_embed_from_message)
 
 async def teardown(bot):
     bot.tree.remove_command("createembed")
     bot.tree.remove_command("setembedconfig")
+    bot.tree.remove_command("Create Embed from Message")
