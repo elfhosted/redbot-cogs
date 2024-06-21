@@ -100,7 +100,7 @@ class RedBotCogSupport(commands.Cog):
                     subject = subject[:97] + "..."
                 mylogger.info(f"Thread subject: {subject} (length: {len(subject)})")
 
-                description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)\n\n<@&{elf_venger}><@&{elf_trainee_id}>"
+                description = f"{message_link.author.mention}, please continue the conversation here.\n\n**Content:** {message_link.content}\n\n**Attachments:**(if any)"
                 
                 
                 if len(description) < 100:

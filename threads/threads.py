@@ -167,10 +167,7 @@ class Threads(commands.Cog):
         except discord.Forbidden:
             mylogger.error("Missing permissions to send messages in the thread.")
 
-        # Pinging roles and users, then deleting the ping message
-        ping_message = await thread.send(f"<@&{self.role2}> {initial_mention}")
-        await asyncio.sleep(1)
-        await ping_message.delete()
+        await thread.send(f"<@&{self.role2}> <@&{self.elf_trainee_id}> ")
 
     @app_commands.command(name="close")
     async def close(self, interaction: discord.Interaction):
