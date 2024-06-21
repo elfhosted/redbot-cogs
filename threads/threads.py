@@ -61,7 +61,7 @@ class Threads(commands.Cog):
             self.ticket_thread_channel = 1253177629645865083  # #general
             self.private_ticket_transcripts = 1253171050217476106  #
             self.private_ticket_notify_channel = 1253214649592315955
-            self.elf_trainee_id = 1252252269790105721
+            self.elf_trainee_id = 720195752650997771
         elif self.bot.user.id == 1252847131476230194:  # Sparky Jr
             self.role1 = 1252431218025431041  # Test Priority Support
             self.elf_venger = 1252252269790105721  # Test-Elf-Venger
@@ -71,7 +71,7 @@ class Threads(commands.Cog):
             self.ticket_thread_channel = 1253177629645865083  # #general
             self.private_ticket_transcripts = 1253171050217476106  #
             self.private_ticket_notify_channel = 1253214649592315955
-            self.elf_trainee_id = 1252252269790105721
+            self.elf_trainee_id = 720195752650997771
         elif self.bot.user.id == 1250431337156837428:  # Spanky
             self.role1 = 1198385945049825322  # Elf Trainees
             self.elf_venger = 1198381095553617922  # ElfVenger
