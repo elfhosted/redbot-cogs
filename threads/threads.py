@@ -307,8 +307,8 @@ class Threads(commands.Cog):
             )
             await interaction.channel.send(embed=embed)
 
-            tags = [tag for tag in thread.parent.available_tags if tag.name.lower() == "closed"]
             try:
+                tags = [tag for tag in thread.parent.available_tags if tag.name.lower() == "closed"]
                 await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
             except discord.Forbidden:
                 mylogger.error("Missing permissions to lock and archive the thread.")
@@ -337,12 +337,9 @@ class Threads(commands.Cog):
 
         # Create a transcript
         transcript = []
-        participants = set()
         async for message in interaction.channel.history(limit=None, oldest_first=True):
             timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
             transcript.append(f"<div class='message'><div class='message-author'>{message.author.name}</div><div class='message-timestamp'>{timestamp}</div><div class='message-content'>{message.content}</div></div>")
-            participants.add(message.author.mention)
-
         transcript_html = f"""
         <!DOCTYPE html>
         <html lang="en">
@@ -397,15 +394,17 @@ class Threads(commands.Cog):
         transcript_channel = self.bot.get_channel(self.transcript_channel_id)
         if transcript_channel:
             embed = discord.Embed(
-                title="Ticket Transcript",
-                description=f"Transcript for {interaction.channel.name}",
+                title=f"Transcript for {interaction.channel.name}",
+                description=(
+                    f"**Closed by:** {interaction.user.mention}\n"
+                    f"**Closed at:** {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+                    f"**Participants:** {', '.join([member.name for member in interaction.channel.members])}"
+                ),
                 color=0x437820
             )
-            embed.add_field(name="Closed By", value=interaction.user.mention, inline=False)
-            embed.add_field(name="Closed At", value=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), inline=False)
-            embed.add_field(name="Participants", value=", ".join(participants), inline=False)
-            embed.add_field(name="Transcript", value=f"[View Transcript](attachment://{interaction.channel.name}_transcript.html)", inline=False)
-            await transcript_channel.send(embed=embed, file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html"))
+            file = discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
+            embed.add_field(name="View Transcript", value=f"[View Transcript](attachment://{interaction.channel.name}_transcript.html)")
+            await transcript_channel.send(embed=embed, file=file)
 
         try:
             user_mention = re.search(r"<@!?(\d+)>", interaction.channel.name)
@@ -420,8 +419,16 @@ class Threads(commands.Cog):
         except Exception as e:
             mylogger.error(f"Failed to send transcript to user: {e}")
 
+        embed = discord.Embed(
+            title=f"Transcript for {interaction.channel.name}",
+            description=f"Your ticket was closed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n\n[Open Transcript](attachment://{interaction.channel.name}_transcript.html)",
+            color=0x437820
+        )
+        embed.add_field(name="Participants", value=", ".join([member.mention for member in interaction.channel.members]), inline=False)
+        embed.set_footer(text="Thank you for using our support service!")
+
         await interaction.channel.edit(archived=True, locked=True)
-        await interaction.channel.send("This ticket has been closed and the channel has been archived.")
+        await interaction.channel.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
