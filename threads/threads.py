@@ -79,8 +79,8 @@ class Threads(commands.Cog):
             self.parent_channel_id = 1245513340176961606  # #elf-support
             self.private_channel_id = 1118645576884572303  # #elf-friends
             self.transcript_channel_id = 123456789012345678  # not setup
-            self.support_notify = 123456789012345678  # not setup
-            self.ticket_support = 1118863307084935259
+            self.support_notify = 1253531682557001810  # #elf-venger-tix
+            self.ticket_support = 1198381095553617922  # elf-vengers (is this the correct usage?)
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
