@@ -3,7 +3,11 @@ import logging
 import asyncio
 from redbot.core import commands, app_commands
 
-ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
+# 1247172016490938472 = elf-devs
+# 1198385945049825322 = elf-trainee
+# 1252252269790105721 = elf-venger
+
+ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721, 1247172016490938472]
 
 mylogger = logging.getLogger('test_support')
 mylogger.setLevel(logging.DEBUG)  
