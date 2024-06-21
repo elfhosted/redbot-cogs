@@ -159,6 +159,7 @@ class Threads(commands.Cog):
                 color=0x437820
             )
             message = await thread.send(embed=close_embed)
+            await thread.send(f"<@&{self.role2}> <@&{self.elf_trainee_id}> ")
 
             try:
                 await message.pin(reason="Makes it easier to close the post.")
@@ -166,8 +167,6 @@ class Threads(commands.Cog):
                 mylogger.error("Missing permissions to pin messages.")
         except discord.Forbidden:
             mylogger.error("Missing permissions to send messages in the thread.")
-
-        await thread.send(f"<@&{self.role2}> <@&{self.elf_trainee_id}> ")
 
     @app_commands.command(name="close")
     async def close(self, interaction: discord.Interaction):
