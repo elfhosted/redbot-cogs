@@ -77,7 +77,7 @@ class Threads(commands.Cog):
             self.sponsor = 862041125706268702  # Sponsor - not used
             self.general_chat = 1118645576884572303  # #elf-friends
             self.parent_channel_id = 1245513340176961606  # #elf-support
-            self.private_channel_id = 1118645576884572303  # #elf-friends
+            self.private_channel_id = 1253543483868971151  # #private-tickets
             self.transcript_channel_id = 1253542587613188216  # #elf-venger-transcripts
             self.support_notify = 1253531682557001810  # #elf-venger-tix
             self.ticket_support = 1198381095553617922  # elf-vengers (is this the correct usage?)
