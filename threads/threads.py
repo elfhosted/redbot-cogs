@@ -290,7 +290,7 @@ class Threads(commands.Cog):
             try:
                 notification_channel = self.bot.get_channel(self.support_notify)
                 if notification_channel:
-                    await notification_channel.send(f"New private ticket opened: {new_thread.jump_url}", allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
+                    await notification_channel.send(f"<@&{self.role2}> New private ticket opened: {new_thread.jump_url}", allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
@@ -342,19 +342,19 @@ class Threads(commands.Cog):
             <title>Transcript</title>
             <style>
                 body {{
-                    font-family: Arial, sans-serif;
-                    margin: 20px;
-                    background-color: #f4f4f4;
+                    font-family: Arial, sans-serif.
+                    margin: 20px.
+                    background-color: #f4f4f4.
                 }}
                 .transcript-container {{
-                    background-color: #fff;
-                    border-radius: 5px;
-                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-                    padding: 20px;
+                    background-color: #fff.
+                    border-radius: 5px.
+                    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1).
+                    padding: 20px.
                 }}
                 .message {{
-                    border-bottom: 1px solid #ddd;
-                    padding: 10px 0;
+                    border-bottom: 1px solid #ddd.
+                    padding: 10px 0.
                 }}
                 .message:last-child {{
                     border-bottom: none.
@@ -363,7 +363,7 @@ class Threads(commands.Cog):
                     font-weight: bold.
                 }}
                 .message-timestamp {{
-                    color: #888;
+                    color: #888.
                     font-size: 0.9em.
                 }}
                 .message-content {{
@@ -387,7 +387,7 @@ class Threads(commands.Cog):
         transcript_channel = self.bot.get_channel(self.transcript_channel_id)
         if transcript_channel:
             await transcript_channel.send(
-                f"Transcript for {interaction.channel.name}",
+                f"<@&{self.role2}> Transcript for {interaction.channel.name}",
                 file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
             )
 
