@@ -1,0 +1,8 @@
+{
+    "name": "CustomEmbed",
+    "author": ["ElfHosted"],
+    "description": "A cog to create custom embeds with slash commands.",
+    "install_msg": "Thank you for installing the CustomEmbed cog. Use `/createembed` to create custom embeds and `/setembedconfig` to configure default settings.",
+    "requirements": [],
+    "tags": ["embed", "custom", "slash commands"]
+}

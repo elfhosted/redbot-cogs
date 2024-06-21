@@ -290,14 +290,19 @@ class Threads(commands.Cog):
 
             try:
                 notification_channel = self.bot.get_channel(self.private_ticket_notify_channel)
-                if notification_channel:
+                if not notification_channel:
+                    mylogger.error(f"Notification channel with ID {self.private_ticket_notify_channel} not found")
+                if not self.elf_venger:
+                    mylogger.error("Role ID for elf_venger is not set")
+                else:
                     await notification_channel.send(f"<@&{self.elf_venger}>", embed=discord.Embed(
                         title="New Private Ticket Opened",
                         description=f"A new private ticket has been opened: [Click here to view]({new_thread.jump_url})",
                         color=0x437820
-                    ), allowed_mentions=discord.AllowedMentions(roles=[ticketrole]))
+                    ), allowed_mentions=discord.AllowedMentions(roles=[discord.Object(id=self.elf_venger)]))
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
+
 
             embed = discord.Embed(
                 title="Thread Moved to Private Channel",
