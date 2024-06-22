@@ -352,12 +352,10 @@ class Threads(commands.Cog):
             await interaction.channel.send(embed=embed)
             
             try:
-                # Remove all participants from the thread
                 members = await interaction.channel.fetch_members()
                 async for thread_member in members:
                     await interaction.channel.remove_user(thread_member)
 
-                # Archive and lock the thread
                 closed_tag = next(tag for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed")
                 await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=[closed_tag])
             except StopIteration:
@@ -375,6 +373,7 @@ class Threads(commands.Cog):
         try:
             mylogger.info(f"close_ticket command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
             
+            # Ensure the command is run in a thread within the specified parent or private channel
             if interaction.channel.type != discord.ChannelType.public_thread and interaction.channel.type != discord.ChannelType.private_thread:
                 mylogger.error("Command used in an invalid channel type.")
                 await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
@@ -418,17 +417,17 @@ class Threads(commands.Cog):
                         padding: 10px 0;
                     }}
                     .message:last-child {{
-                        border-bottom: none;
+                        border-bottom: none.
                     }}
                     .message-author {{
-                        font-weight: bold;
+                        font-weight: bold.
                     }}
                     .message-timestamp {{
                         color: #888;
-                        font-size: 0.9em;
+                        font-size: 0.9em.
                     }}
                     .message-content {{
-                        margin-top: 5px;
+                        margin-top: 5px.
                     }}
                 </style>
             </head>
@@ -457,7 +456,8 @@ class Threads(commands.Cog):
                             f"**Transcript:** [View Transcript](attachment://{tmp_file_path.split('/')[-1]})"
                         ),
                         color=0x437820
-                    ), file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html")
+                    ), file=discord.File(tmp_file_path, filename=f"{interaction.channel.name}_transcript.html"),
+                    allowed_mentions=discord.AllowedMentions(roles=[interaction.guild.get_role(self.elf_venger)])
                 )
 
             try:
@@ -484,17 +484,23 @@ class Threads(commands.Cog):
             embed.add_field(name="Participants", value=", ".join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()]), inline=False)
             embed.set_footer(text="Thank you for using our support service!")
 
+            await interaction.channel.send(embed=embed)
+
             if user_mention:
                 user_id = int(user_mention.group(1))
-                async for thread_member in interaction.channel.fetch_members():
+                members = await interaction.channel.fetch_members()
+                for thread_member in members:
                     if thread_member.id != user_id:
                         await interaction.channel.remove_user(thread_member)
 
             await interaction.channel.edit(archived=True, locked=True)
-            await interaction.channel.send(embed=embed)
+
         except Exception as e:
             mylogger.exception("An error occurred in the close_ticket command", exc_info=e)
-            await interaction.response.send_message("An unexpected error occurred. Please try again later.", ephemeral=True)
+            try:
+                await interaction.response.send_message("An unexpected error occurred. Please try again later.", ephemeral=True)
+            except discord.errors.Forbidden:
+                mylogger.error("Failed to send error message to user: Missing Access.")
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
