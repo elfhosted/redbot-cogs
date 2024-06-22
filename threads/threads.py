@@ -245,9 +245,12 @@ class Threads(commands.Cog):
 
                         tags = [tag for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
 
-                        async for thread_member in channel.fetch_members():
+                        # Remove all participants from the thread
+                        members = await channel.fetch_members()
+                        for thread_member in members:
                             await channel.remove_user(thread_member)
 
+                        # Archive and lock the thread
                         await channel.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
                     except Exception as e:
                         mylogger.exception("An error occurred while closing the thread", exc_info=e)
@@ -352,10 +355,12 @@ class Threads(commands.Cog):
             await interaction.channel.send(embed=embed)
             
             try:
+                # Remove all participants from the thread
                 members = await interaction.channel.fetch_members()
-                async for thread_member in members:
+                for thread_member in members:
                     await interaction.channel.remove_user(thread_member)
 
+                # Archive and lock the thread
                 closed_tag = next(tag for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed")
                 await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=[closed_tag])
             except StopIteration:
@@ -364,7 +369,8 @@ class Threads(commands.Cog):
                 mylogger.error("Missing permissions to lock and archive the thread.")
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
-            await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)   
+            await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
+
 
     @app_commands.command(name="close-ticket")
     @commands.has_permissions(manage_channels=True)
