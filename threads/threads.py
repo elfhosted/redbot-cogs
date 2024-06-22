@@ -331,11 +331,16 @@ class Threads(commands.Cog):
 
             user = None
             if thread.owner.id == self.bot_uid:
-                async for message in thread.history(oldest_first=True, limit=1):
+                async for message in thread.history(oldest_first=True, limit=10):
                     if message.content.startswith("@"):
+                        mylogger.info(f"Message content: {message.content}")
                         user_mention = message.content.split()[0]
-                        user_id = int(re.search(r'\d+', user_mention).group())
-                        user = interaction.guild.get_member(user_id)
+                        mylogger.info(f"User mention: {user_mention}")
+                        user_id_match = re.search(r'\d+', user_mention)
+                        if user_id_match:
+                            user_id = int(user_id_match.group())
+                            user = interaction.guild.get_member(user_id)
+                            mylogger.info(f"User determined from message: {user}")
                         break
             else:
                 user = thread.owner
@@ -354,7 +359,6 @@ class Threads(commands.Cog):
 
             new_thread = await private_channel.create_thread(name=new_thread_name)
             new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention}\n\nHere is the original thread: [Click Me]({thread.jump_url})")
-
             original_content = "No original content found."
             if thread.owner.bot:
                 async for message in thread.history(oldest_first=True):
