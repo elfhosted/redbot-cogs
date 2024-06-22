@@ -286,15 +286,17 @@ class Threads(commands.Cog):
             new_thread_name = f"🔒┆{username}"
 
             if thread.owner.id == self.bot_uid:
-                author_name = match.group(1) if match else thread.owner.name
-                user = discord.utils.get(thread.guild.members, name=author_name)
+                async for message in thread.history(oldest_first=True, limit=1):
+                    if message.content.startswith("@"):
+                        user_mention = message.content.split()[0]
+                        user_id = int(user_mention.strip('<@!>'))
+                        user = interaction.guild.get_member(user_id)
+                        break
             else:
                 user = thread.owner
                 author_name = user.name
 
             elfvenger = thread.guild.get_role(self.elf_venger)
-            ticketrole = thread.guild.get_role(self.ticket_support)
-
             private_channel = self.bot.get_channel(self.ticket_thread_channel)
             if not private_channel:
                 mylogger.error("Private channel could not be found.")
@@ -302,8 +304,7 @@ class Threads(commands.Cog):
                 return
 
             new_thread = await private_channel.create_thread(name=new_thread_name)
-            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: [{thread.name}]({thread.jump_url})")
-
+            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: [Click Me]({thread.jump_url})")
             original_content = "No original content found."
             if thread.owner.bot:
                 async for message in thread.history(oldest_first=True):
@@ -353,12 +354,13 @@ class Threads(commands.Cog):
                 color=0x437820
             )
             await interaction.channel.send(embed=embed)
-            
+
             try:
-                # Remove all participants from the thread
+                # Remove all participants from the thread except the original member
                 members = await interaction.channel.fetch_members()
                 for thread_member in members:
-                    await interaction.channel.remove_user(thread_member)
+                    if thread_member.id != user.id:
+                        await interaction.channel.remove_user(thread_member)
 
                 # Archive and lock the thread
                 closed_tag = next(tag for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed")
@@ -370,6 +372,7 @@ class Threads(commands.Cog):
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
+
 
 
     @app_commands.command(name="close-ticket")
@@ -390,6 +393,14 @@ class Threads(commands.Cog):
                 mylogger.error("Command used in a thread outside the specified parent or private channel.")
                 await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
                 return
+
+            # Extract the user mention from the opening message
+            async for message in interaction.channel.history(oldest_first=True, limit=1):
+                if message.content.startswith("Private thread created for"):
+                    user_mention = message.content.split()[4]
+                    user_id = int(user_mention.strip('<@!>'))
+                    user = interaction.guild.get_member(user_id)
+                    break
 
             review_message = "Thank you for contacting support! Please leave a review with `/review`."
             await interaction.channel.send(review_message)
@@ -423,17 +434,17 @@ class Threads(commands.Cog):
                         padding: 10px 0;
                     }}
                     .message:last-child {{
-                        border-bottom: none.
+                        border-bottom: none;
                     }}
                     .message-author {{
-                        font-weight: bold.
+                        font-weight: bold;
                     }}
                     .message-timestamp {{
                         color: #888;
-                        font-size: 0.9em.
+                        font-size: 0.9em;
                     }}
                     .message-content {{
-                        margin-top: 5px.
+                        margin-top: 5px;
                     }}
                 </style>
             </head>
@@ -492,12 +503,11 @@ class Threads(commands.Cog):
 
             await interaction.channel.send(embed=embed)
 
-            if user_mention:
-                user_id = int(user_mention.group(1))
-                members = await interaction.channel.fetch_members()
-                for thread_member in members:
-                    if thread_member.id != user_id:
-                        await interaction.channel.remove_user(thread_member)
+            # Remove all participants from the thread except the original member
+            members = await interaction.channel.fetch_members()
+            for thread_member in members:
+                if thread_member.id != user.id:
+                    await interaction.channel.remove_user(thread_member)
 
             await interaction.channel.edit(archived=True, locked=True)
 
@@ -507,6 +517,7 @@ class Threads(commands.Cog):
                 await interaction.response.send_message("An unexpected error occurred. Please try again later.", ephemeral=True)
             except discord.errors.Forbidden:
                 mylogger.error("Failed to send error message to user: Missing Access.")
+
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
