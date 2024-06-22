@@ -36,6 +36,35 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
 
         await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions)
         await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
+        await self.interaction.channel.send(view=PrivateRequestApprovalView(cog=self.cog))
+
+
+class PrivateRequestApprovalView(discord.ui.View):
+    def __init__(self, cog, *args, **kwargs):
+        self.cog = cog
+        super().__init__(*args, **kwargs)
+
+    @discord.ui.button(label="Approve", style=discord.ButtonStyle.green, emoji="✅", custom_id="approve_request")
+    async def approve_request(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+        member = interaction.guild.get_member(interaction.user.id)
+        if any(role.id == self.cog.elf_venger for role in member.roles):
+            await self.cog._make_private(interaction)
+        else:
+            await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
+
+    @discord.ui.button(label="Deny", style=discord.ButtonStyle.red, emoji="❌", custom_id="deny_request")
+    async def deny_request(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+        member = interaction.guild.get_member(interaction.user.id)
+        if any(role.id == self.cog.elf_venger for role in member.roles):
+            embed = discord.Embed(
+                title="Private Support Request Denied",
+                description="Your request for private support has been denied. Please continue the conversation in this thread.",
+                color=0xff0000
+            )
+            await interaction.channel.send(embed=embed)
+            await interaction.response.send_message("You have denied the request for private support.", ephemeral=True)
+        else:
+            await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
 
 
 class Buttons(discord.ui.View):
@@ -67,6 +96,7 @@ class Buttons(discord.ui.View):
         else:
             # Show a modal to get the reason for private support
             await interaction.response.send_modal(PrivateSupportReasonModal(cog=self.cog, interaction=interaction))
+
 
 
 class Threads(commands.Cog):
