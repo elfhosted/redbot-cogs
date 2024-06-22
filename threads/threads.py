@@ -291,7 +291,16 @@ class Threads(commands.Cog):
                     original_content = message.content
                     break
 
-            await new_thread.send(content=f"**Original Message:** {original_content}\n\n**Opened by:** {interaction.user.mention} <@&{self.elf_venger}>")
+            await thread.send(
+                content=f"<@&{self.elf_venger}> <@&{self.elf_trainee_id}>",
+                allowed_mentions=discord.AllowedMentions(roles=[thread.guild.get_role(self.elf_venger), thread.guild.get_role(self.elf_trainee_id)])
+            )
+
+            await new_thread.send(
+                content=f"**Original Message:** {original_content}\n\n**Opened by:** {interaction.user.mention} <@&{self.elf_venger}>",
+                allowed_mentions=discord.AllowedMentions(roles=[thread.guild.get_role(self.elf_venger)])
+                )
+
 
             try:
                 notification_channel = self.bot.get_channel(self.private_ticket_notify_channel)
