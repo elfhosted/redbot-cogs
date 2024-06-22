@@ -25,7 +25,6 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
             default="Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
                     "and not as a path of escalation. As such, private mode will likely result in a slower response time*",
             custom_id="notice",
-            disabled=True
         ))
 
         self.add_item(discord.ui.TextInput(
