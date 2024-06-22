@@ -329,6 +329,7 @@ class Threads(commands.Cog):
             username = match.group(1) if match else thread.owner.name
             new_thread_name = f"🔒┆{username}"
 
+            user = None
             if thread.owner.id == self.bot_uid:
                 async for message in thread.history(oldest_first=True, limit=1):
                     if message.content.startswith("@"):
@@ -338,7 +339,11 @@ class Threads(commands.Cog):
                         break
             else:
                 user = thread.owner
-                author_name = user.name
+
+            if user is None:
+                mylogger.error("User could not be determined.")
+                await interaction.response.send_message("Could not determine the user to create the private thread for.", ephemeral=True)
+                return
 
             elfvenger = thread.guild.get_role(self.elf_venger)
             private_channel = self.bot.get_channel(self.ticket_thread_channel)
@@ -348,7 +353,7 @@ class Threads(commands.Cog):
                 return
 
             new_thread = await private_channel.create_thread(name=new_thread_name)
-            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: [Click Me]({thread.jump_url})")
+            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention}\n\nHere is the original thread: [Click Me]({thread.jump_url})")
 
             original_content = "No original content found."
             if thread.owner.bot:
