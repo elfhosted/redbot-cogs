@@ -44,7 +44,7 @@ class Buttons(discord.ui.View):
             # Create an embed message indicating the request for private support
             embed = discord.Embed(
                 title="Private Support Request",
-                description=f"{interaction.user.mention} is requesting private support.",
+                description=f"{interaction.user.mention} is requesting private support.\n\n__**Notice: **__*Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), and not as a path of escalation. As such, private mode will likely result in a slower response time*",
                 color=0x437820
             )
 
