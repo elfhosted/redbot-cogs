@@ -481,9 +481,12 @@ class Threads(commands.Cog):
             embed.add_field(name="Participants", value=", ".join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()]), inline=False)
             embed.set_footer(text="Thank you for using our support service!")
 
-            # Remove all participants from the thread
-            async for thread_member in interaction.channel.fetch_members():
-                await interaction.channel.remove_user(thread_member)
+            # Remove all participants except the original thread owner
+            if user_mention:
+                user_id = int(user_mention.group(1))
+                async for thread_member in interaction.channel.fetch_members():
+                    if thread_member.id != user_id:
+                        await interaction.channel.remove_user(thread_member)
 
             # Archive and lock the thread
             await interaction.channel.edit(archived=True, locked=True)
@@ -491,6 +494,7 @@ class Threads(commands.Cog):
         except Exception as e:
             mylogger.exception("An error occurred in the close_ticket command", exc_info=e)
             await interaction.response.send_message("An unexpected error occurred. Please try again later.", ephemeral=True)
+
 
 
 async def setup(bot):
