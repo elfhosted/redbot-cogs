@@ -13,9 +13,15 @@ handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 mylogger.addHandler(handler)
-
 class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support"):
-    reason = discord.ui.TextInput(label="Reason for requesting private support", style=discord.TextStyle.paragraph)
+    reason = discord.ui.TextInput(
+        label="Reason for requesting private support",
+        style=discord.TextStyle.paragraph,
+        placeholder="Enter your reason here...",
+        default="__**Notice:**__ *Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
+                "and not as a path of escalation. As such, private mode will likely result in a slower response time*\n\n"
+                "Please provide your reason for requesting private support below:\n"
+    )
 
     def __init__(self, cog, interaction, *args, **kwargs):
         self.cog = cog
@@ -26,16 +32,13 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
         embed = discord.Embed(
             title="Private Support Request",
             description=f"{self.interaction.user.mention} is requesting private support for the following reason:\n\n"
-                        f"{self.reason.value}\n\n"
-                        "__**Notice: **__*Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
-                        "and not as a path of escalation. As such, private mode will likely result in a slower response time*",
+                        f"{self.reason.value}\n\n",
             color=0x437820
         )
 
         allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.cog.elf_venger)])
 
-        await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions)
-        await self.interaction.channel.send(view=PrivateRequestApprovalView(cog=self.cog))
+        await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
         await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
 
 
@@ -95,6 +98,36 @@ class Buttons(discord.ui.View):
             await self.cog._make_private(interaction)
         else:
             # Show a modal to get the reason for private support
+            await interaction.response.send_modal(PrivateSupportReasonModal(cog=self.cog, interaction=interaction))
+
+
+class Buttons(discord.ui.View):
+    def __init__(self, cog, bot_role_id, user_id, *, timeout=None):
+        self.cog = cog
+        self.bot_role_id = bot_role_id
+        self.user_id = user_id
+        super().__init__(timeout=timeout)
+
+    @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="Close Post")
+    async def gray_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+        channel = interaction.channel
+        if channel and isinstance(channel, discord.Thread):
+            member = interaction.guild.get_member(interaction.user.id)
+            mylogger.info(f"Close button pressed by {interaction.user.name} (ID: {interaction.user.id}) with roles: {[role.id for role in member.roles]}")
+            mylogger.info(f"Required bot role ID: {self.bot_role_id}")
+            if interaction.user.id == self.user_id or any(role.id == self.bot_role_id for role in member.roles):
+                await self.cog._close(interaction)
+            else:
+                await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
+
+    @discord.ui.button(label="Private Mode", style=discord.ButtonStyle.green, emoji="🔒", custom_id="Private Mode")
+    async def private_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+        member = interaction.guild.get_member(interaction.user.id)
+        mylogger.info(f"Private button pressed by {interaction.user.name} (ID: {interaction.user.id})")
+
+        if any(role.id == self.cog.elf_venger for role in member.roles):
+            await self.cog._make_private(interaction)
+        else:
             await interaction.response.send_modal(PrivateSupportReasonModal(cog=self.cog, interaction=interaction))
 
 
