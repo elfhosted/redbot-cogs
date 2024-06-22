@@ -19,10 +19,11 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
         self.interaction = interaction
         super().__init__(*args, **kwargs)
 
-        self.add_item(discord.ui.Label(
-            text="Notice: Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
-                 "and not as a path of escalation. As such, private mode will likely result in a slower response time",
+        self.add_item(discord.ui.TextInput(
+            label="Private Ticket Notice",
             style=discord.TextStyle.paragraph,
+            default="Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
+                    "and not as a path of escalation. As such, private mode will likely result in a slower response time*",
             custom_id="notice",
             disabled=True
         ))
@@ -45,6 +46,7 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
 
         await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
         await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
+
 
 class PrivateRequestApprovalView(discord.ui.View):
     def __init__(self, cog, *args, **kwargs):
