@@ -332,7 +332,7 @@ class Threads(commands.Cog):
         tags = []
 
         try:
-            tags = [tag.id for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
+            tags = [tag.id for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed"]
             if tags:
                 await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
             else:
