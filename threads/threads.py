@@ -309,7 +309,7 @@ class Threads(commands.Cog):
                 if not self.elf_venger:
                     mylogger.error("Role ID for elf_venger is not set")
                 else:
-                    await notification_channel.send(f"<@&{self.elf_venger}>", embed=discord.Embed(
+                    await notification_channel.send(f"", embed=discord.Embed( #<@&{self.elf_venger}>
                         title="New Private Ticket Opened",
                         description=(
                             f"**Original Title:** {thread.name}\n\n"
