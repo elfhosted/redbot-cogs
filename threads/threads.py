@@ -14,13 +14,20 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 mylogger.addHandler(handler)
 class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support"):
+    notice = discord.ui.TextInput(
+        label="Notice",
+        style=discord.TextStyle.short,
+        placeholder="",
+        default="__**Notice:**__ *Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
+                "and not as a path of escalation. As such, private mode will likely result in a slower response time*",
+        required=False,
+        max_length=0
+    )
+
     reason = discord.ui.TextInput(
         label="Reason for requesting private support",
         style=discord.TextStyle.paragraph,
-        placeholder="Enter your reason here...",
-        default="__**Notice:**__ *Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
-                "and not as a path of escalation. As such, private mode will likely result in a slower response time*\n\n"
-                "Please provide your reason for requesting private support below:\n"
+        placeholder="Enter your reason here..."
     )
 
     def __init__(self, cog, interaction, *args, **kwargs):
@@ -40,7 +47,6 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
 
         await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
         await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
-
 
 class PrivateRequestApprovalView(discord.ui.View):
     def __init__(self, cog, *args, **kwargs):
