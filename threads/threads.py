@@ -329,17 +329,15 @@ class Threads(commands.Cog):
                 color=0x437820
             )
             await interaction.channel.send(embed=embed)
-        tags = []
-
-        try:
-            tags = [tag.id for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed"]
-            if tags:
-                await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
-            else:
+            
+            try:
+                closed_tag = next(tag for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed")
+                await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=[closed_tag])
+            except StopIteration:
                 await thread.edit(name=new_thread_name, locked=True, archived=True)
-        except discord.Forbidden:
-            mylogger.error("Missing permissions to lock and archive the thread.")
-            await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
+            except discord.Forbidden:
+                mylogger.error("Missing permissions to lock and archive the thread.")
+                await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
 
