@@ -334,7 +334,7 @@ class Threads(commands.Cog):
                 async for message in thread.history(oldest_first=True, limit=1):
                     if message.content.startswith("@"):
                         user_mention = message.content.split()[0]
-                        user_id = int(user_mention.strip('<@!>'))
+                        user_id = int(re.search(r'\d+', user_mention).group())
                         user = interaction.guild.get_member(user_id)
                         break
             else:
