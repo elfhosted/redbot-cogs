@@ -14,32 +14,30 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 mylogger.addHandler(handler)
 class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support"):
-    notice = discord.ui.TextInput(
-        label="Notice",
-        style=discord.TextStyle.short,
-        placeholder="",
-        default="__**Notice:**__ *Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
-                "and not as a path of escalation. As such, private mode will likely result in a slower response time*",
-        required=False,
-        max_length=0
-    )
-
-    reason = discord.ui.TextInput(
-        label="Reason for requesting private support",
-        style=discord.TextStyle.paragraph,
-        placeholder="Enter your reason here..."
-    )
-
     def __init__(self, cog, interaction, *args, **kwargs):
         self.cog = cog
         self.interaction = interaction
         super().__init__(*args, **kwargs)
 
+        self.add_item(discord.ui.Label(
+            text="Notice: Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
+                 "and not as a path of escalation. As such, private mode will likely result in a slower response time",
+            style=discord.TextStyle.paragraph,
+            custom_id="notice",
+            disabled=True
+        ))
+
+        self.add_item(discord.ui.TextInput(
+            label="Reason for requesting private support",
+            style=discord.TextStyle.paragraph,
+            placeholder="Enter your reason here..."
+        ))
+
     async def on_submit(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="Private Support Request",
             description=f"{self.interaction.user.mention} is requesting private support for the following reason:\n\n"
-                        f"{self.reason.value}\n\n",
+                        f"{self.children[1].value}\n\n",
             color=0x437820
         )
 
