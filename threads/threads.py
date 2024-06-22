@@ -317,9 +317,11 @@ class Threads(commands.Cog):
                 allowed_mentions=discord.AllowedMentions(roles=[thread.guild.get_role(self.elf_venger), thread.guild.get_role(self.elf_trainee_id)])
             )
 
+            allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.elf_venger)])
+
             await new_thread.send(
                 content=f"**Original Message:** {original_content}\n\n**Opened by:** {interaction.user.mention} <@&{self.elf_venger}>",
-                allowed_mentions=discord.AllowedMentions(roles=[thread.guild.get_role(self.elf_venger)])
+                allowed_mentions=allowed_mentions
             )
 
             try:
@@ -338,7 +340,7 @@ class Threads(commands.Cog):
                             f"**Private Thread:** [View Thread]({new_thread.jump_url})"
                         ),
                         color=0x437820
-                    ), allowed_mentions=discord.AllowedMentions(roles=[discord.Object(id=self.elf_venger)]))
+                    ), allowed_mentions=allowed_mentions)
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
@@ -350,9 +352,12 @@ class Threads(commands.Cog):
             await interaction.channel.send(embed=embed)
             
             try:
-                async for thread_member in interaction.channel.fetch_members():
+                # Remove all participants from the thread
+                members = await interaction.channel.fetch_members()
+                async for thread_member in members:
                     await interaction.channel.remove_user(thread_member)
 
+                # Archive and lock the thread
                 closed_tag = next(tag for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed")
                 await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=[closed_tag])
             except StopIteration:
@@ -361,7 +366,7 @@ class Threads(commands.Cog):
                 mylogger.error("Missing permissions to lock and archive the thread.")
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
-            await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
+            await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)   
 
     @app_commands.command(name="close-ticket")
     @commands.has_permissions(manage_channels=True)
