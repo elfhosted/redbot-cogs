@@ -14,6 +14,30 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 mylogger.addHandler(handler)
 
+class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support"):
+    reason = discord.ui.TextInput(label="Reason for requesting private support", style=discord.TextStyle.paragraph)
+
+    def __init__(self, cog, interaction, *args, **kwargs):
+        self.cog = cog
+        self.interaction = interaction
+        super().__init__(*args, **kwargs)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = discord.Embed(
+            title="Private Support Request",
+            description=f"{self.interaction.user.mention} is requesting private support for the following reason:\n\n"
+                        f"{self.reason.value}\n\n"
+                        "__**Notice: **__*Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), "
+                        "and not as a path of escalation. As such, private mode will likely result in a slower response time*",
+            color=0x437820
+        )
+
+        allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.cog.elf_venger)])
+
+        await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions)
+        await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
+
+
 class Buttons(discord.ui.View):
     def __init__(self, cog, bot_role_id, user_id, *, timeout=None):
         self.cog = cog
@@ -41,18 +65,8 @@ class Buttons(discord.ui.View):
         if any(role.id == self.cog.elf_venger for role in member.roles):
             await self.cog._make_private(interaction)
         else:
-            # Create an embed message indicating the request for private support
-            embed = discord.Embed(
-                title="Private Support Request",
-                description=f"{interaction.user.mention} is requesting private support.\n\n__**Notice: **__*Private mode bypasses community input, and is intended for the communication of sensitive details (credentials, tokens, etc), and not as a path of escalation. As such, private mode will likely result in a slower response time*",
-                color=0x437820
-            )
-
-            allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.cog.elf_venger)])
-
-            await interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions)
-            await interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
-
+            # Show a modal to get the reason for private support
+            await interaction.response.send_modal(PrivateSupportReasonModal(cog=self.cog, interaction=interaction))
 
 
 class Threads(commands.Cog):
@@ -285,7 +299,6 @@ class Threads(commands.Cog):
             username = match.group(1) if match else thread.owner.name
             new_thread_name = f"🔒┆{username}"
 
-            user = None
             if thread.owner.id == self.bot_uid:
                 async for message in thread.history(oldest_first=True, limit=1):
                     if message.content.startswith("@"):
@@ -295,9 +308,7 @@ class Threads(commands.Cog):
                         break
             else:
                 user = thread.owner
-
-            if user is None:
-                user = interaction.user
+                author_name = user.name
 
             elfvenger = thread.guild.get_role(self.elf_venger)
             private_channel = self.bot.get_channel(self.ticket_thread_channel)
@@ -307,7 +318,7 @@ class Threads(commands.Cog):
                 return
 
             new_thread = await private_channel.create_thread(name=new_thread_name)
-            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention}\n\nHere is the original thread: [Click Me]({thread.jump_url})")
+            new_thread_message = await new_thread.send(content=f"Private thread created for {user.mention if user else 'Unknown User'}\n\nHere is the original thread: [Click Me]({thread.jump_url})")
 
             original_content = "No original content found."
             if thread.owner.bot:
