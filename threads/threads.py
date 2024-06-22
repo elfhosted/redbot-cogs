@@ -35,8 +35,22 @@ class Buttons(discord.ui.View):
 
     @discord.ui.button(label="Private Mode", style=discord.ButtonStyle.green, emoji="🔒", custom_id="Private Mode")
     async def private_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+        member = interaction.guild.get_member(interaction.user.id)
         mylogger.info(f"Private button pressed by {interaction.user.name} (ID: {interaction.user.id})")
-        await self.cog._make_private(interaction)
+
+        if any(role.id == self.elf_venger for role in member.roles):
+            await self.cog._make_private(interaction)
+        else:
+            # Create an embed message indicating the request for private support
+            embed = discord.Embed(
+                title="Private Support Request",
+                description=f"{interaction.user.mention} is requesting private support.",
+                color=0x437820
+            )
+
+            await interaction.channel.send(content=f"<@&{self.elf_venger}>", embed=embed)
+            await interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
+
 
 class Threads(commands.Cog):
     def __init__(self, bot):
@@ -227,6 +241,10 @@ class Threads(commands.Cog):
                         await send(embed=close_embed)
 
                         tags = [tag for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
+
+                        async for thread_member in channel.fetch_members():
+                            await channel.remove_user(thread_member)
+
                         await channel.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
                     except Exception as e:
                         mylogger.exception("An error occurred while closing the thread", exc_info=e)
@@ -240,6 +258,7 @@ class Threads(commands.Cog):
                 await send(f"This command can only be used in a thread.", ephemeral=True)
         else:
             await send(f"This command can only be used in a thread.", ephemeral=True)
+
 
     @app_commands.command()
     async def private(self, interaction: discord.Interaction):
@@ -299,8 +318,7 @@ class Threads(commands.Cog):
             await new_thread.send(
                 content=f"**Original Message:** {original_content}\n\n**Opened by:** {interaction.user.mention} <@&{self.elf_venger}>",
                 allowed_mentions=discord.AllowedMentions(roles=[thread.guild.get_role(self.elf_venger)])
-                )
-
+            )
 
             try:
                 notification_channel = self.bot.get_channel(self.private_ticket_notify_channel)
@@ -309,7 +327,7 @@ class Threads(commands.Cog):
                 if not self.elf_venger:
                     mylogger.error("Role ID for elf_venger is not set")
                 else:
-                    await notification_channel.send(f"", embed=discord.Embed( #<@&{self.elf_venger}>
+                    await notification_channel.send(f"", embed=discord.Embed(
                         title="New Private Ticket Opened",
                         description=(
                             f"**Original Title:** {thread.name}\n\n"
@@ -322,7 +340,6 @@ class Threads(commands.Cog):
             except Exception as e:
                 mylogger.error(f"Failed to notify support: {e}")
 
-
             embed = discord.Embed(
                 title="Thread Moved to Private Channel",
                 description=f"The thread has been moved to a private channel: [Click here to view]({new_thread.jump_url})",
@@ -331,6 +348,8 @@ class Threads(commands.Cog):
             await interaction.channel.send(embed=embed)
             
             try:
+                async for thread_member in interaction.channel.fetch_members():
+                    await interaction.channel.remove_user(thread_member)
                 closed_tag = next(tag for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed")
                 await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=[closed_tag])
             except StopIteration:
@@ -340,6 +359,7 @@ class Threads(commands.Cog):
                 await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
+
 
 
     @app_commands.command(name="close-ticket")
@@ -461,11 +481,17 @@ class Threads(commands.Cog):
             embed.add_field(name="Participants", value=", ".join([self.bot.get_user(member.id).mention for member in await interaction.channel.fetch_members()]), inline=False)
             embed.set_footer(text="Thank you for using our support service!")
 
+            # Remove all participants from the thread
+            async for thread_member in interaction.channel.fetch_members():
+                await interaction.channel.remove_user(thread_member)
+
+            # Archive and lock the thread
             await interaction.channel.edit(archived=True, locked=True)
             await interaction.channel.send(embed=embed)
         except Exception as e:
             mylogger.exception("An error occurred in the close_ticket command", exc_info=e)
             await interaction.response.send_message("An unexpected error occurred. Please try again later.", ephemeral=True)
+
 
 async def setup(bot):
     await bot.add_cog(Threads(bot))
