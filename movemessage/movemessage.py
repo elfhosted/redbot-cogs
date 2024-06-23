@@ -34,10 +34,14 @@ class MoveMessage(commands.Cog):
         url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/(\d+)\/(\d+)', input_str)
         if url_match:
             return int(url_match.group(2))
-        elif re.match(r'^\d+$', input_str):
-            return int(input_str)
         else:
-            return None
+            mention_match = re.match(r'<#(\d+)>', input_str)
+            if mention_match:
+                return int(mention_match.group(1))
+            elif re.match(r'^\d+$', input_str):
+                return int(input_str)
+            else:
+                return None
 
     @commands.command(name="move")
     async def move_message(self, ctx, input_str: str, target_channel: discord.TextChannel = None, target_channel_url: str = None):
