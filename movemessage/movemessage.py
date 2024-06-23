@@ -1,6 +1,15 @@
 import discord
 from redbot.core import commands
 import re
+import logging
+
+# Set up logging
+mylogger = logging.getLogger('MoveMessage')
+mylogger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+mylogger.addHandler(handler)
 
 # List of allowed role IDs
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
@@ -43,7 +52,6 @@ class MoveMessage(commands.Cog):
             return await ctx.send("You do not have the required role to use this command.")
 
         message_id = self.extract_message_id(input_str)
-        await ctx.send(f"Debug: Extracted message ID {message_id}")
 
         if message_id is None:
             return await ctx.send("Invalid input. Please provide a valid message ID or URL.")
@@ -51,25 +59,25 @@ class MoveMessage(commands.Cog):
         try:
             message = await ctx.channel.fetch_message(message_id)
         except discord.NotFound:
+            mylogger.debug(f"Message with ID {message_id} not found.")
             return await ctx.send("Message not found.")
         except discord.Forbidden:
+            mylogger.debug(f"Forbidden access to message with ID {message_id}.")
             return await ctx.send("I do not have permission to access this message.")
         except discord.HTTPException as e:
+            mylogger.debug(f"HTTP exception while fetching message with ID {message_id}: {e}")
             return await ctx.send(f"An error occurred while fetching the message: {e}")
 
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
             thread_id = self.extract_thread_id(target_channel_url)
-            await ctx.send(f"Debug: Extracted channel ID {channel_id}, thread ID {thread_id}")
-
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
-                await ctx.send(f"Debug: Fetched target channel {target_channel}")
             elif thread_id:
                 target_channel = self.bot.get_channel(thread_id)
-                await ctx.send(f"Debug: Fetched target thread {target_channel}")
 
         if target_channel is None:
+            mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
             return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
 
         await self.move_and_notify(ctx, message, target_channel)
@@ -80,7 +88,6 @@ class MoveMessage(commands.Cog):
             return await ctx.send("You do not have the required role to use this command.")
 
         message_ids = self.extract_message_ids(input_str)
-        await ctx.send(f"Debug: Extracted message IDs {message_ids}")
 
         if not message_ids:
             return await ctx.send("Invalid input. Please provide valid message IDs or URLs.")
@@ -92,24 +99,24 @@ class MoveMessage(commands.Cog):
                 messages_to_move.append(message)
             except discord.NotFound:
                 await ctx.send(f"Message with ID {message_id} not found.")
+                mylogger.debug(f"Message with ID {message_id} not found.")
             except discord.Forbidden:
                 await ctx.send(f"I do not have permission to access message with ID {message_id}.")
+                mylogger.debug(f"Forbidden access to message with ID {message_id}.")
             except discord.HTTPException as e:
                 await ctx.send(f"An error occurred while fetching the message with ID {message_id}: {e}")
+                mylogger.debug(f"HTTP exception while fetching message with ID {message_id}: {e}")
 
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
             thread_id = self.extract_thread_id(target_channel_url)
-            await ctx.send(f"Debug: Extracted channel ID {channel_id}, thread ID {thread_id}")
-
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
-                await ctx.send(f"Debug: Fetched target channel {target_channel}")
             elif thread_id:
                 target_channel = self.bot.get_channel(thread_id)
-                await ctx.send(f"Debug: Fetched target thread {target_channel}")
 
         if target_channel is None:
+            mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
             return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
 
         for message in messages_to_move:
@@ -141,8 +148,6 @@ class MoveMessage(commands.Cog):
             if len(messages_to_move) >= num_messages:
                 break
 
-        await ctx.send(f"Debug: Found {len(messages_to_move)} messages from user {user.display_name}")
-
         if not messages_to_move:
             return await ctx.send("No messages found from the specified user.")
         elif len(messages_to_move) < num_messages:
@@ -151,17 +156,14 @@ class MoveMessage(commands.Cog):
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
             thread_id = self.extract_thread_id(target_channel_url)
-            await ctx.send(f"Debug: Extracted channel ID {channel_id}, thread ID {thread_id}")
-
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
-                await ctx.send(f"Debug: Fetched target channel {target_channel}")
             elif thread_id:
                 target_channel = self.bot.get_channel(thread_id)
-                await ctx.send(f"Debug: Fetched target thread {target_channel}")
 
         if target_channel is None:
-            return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
+            mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
+            return await ctx.send(f"Invalid target channel or thread: {target_channel_url}")
 
         for message in messages_to_move:
             await self.move_and_notify(ctx, message, target_channel)
@@ -179,7 +181,9 @@ class MoveMessage(commands.Cog):
 
         try:
             moved_message = await target_channel.send(embed=embed)
+            mylogger.debug(f"Message moved to {target_channel.mention}")
         except discord.HTTPException as e:
+            mylogger.debug(f"An error occurred while moving the message: {e}")
             return await ctx.send(f"An error occurred while moving the message: {e}")
 
         note_embed = discord.Embed(
@@ -191,6 +195,7 @@ class MoveMessage(commands.Cog):
         try:
             await ctx.send(content=message.author.mention, embed=note_embed)
         except discord.HTTPException as e:
+            mylogger.debug(f"An error occurred while notifying the user: {e}")
             await ctx.send(f"An error occurred while notifying the user: {e}")
 
 async def setup(bot):
