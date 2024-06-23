@@ -35,6 +35,7 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
         ))
 
     async def on_submit(self, interaction: discord.Interaction):
+        mylogger.debug("Modal submitted")
         embed = discord.Embed(
             title="Private Support Request",
             description=f"{self.interaction.user.mention} is requesting private support for the following reason:\n\n"
@@ -492,17 +493,17 @@ class Threads(commands.Cog):
                         padding: 10px 0;
                     }}
                     .message:last-child {{
-                        border-bottom: none.
+                        border-bottom: none;
                     }}
                     .message-author {{
-                        font-weight: bold.
+                        font-weight: bold;
                     }}
                     .message-timestamp {{
-                        color: #888.
-                        font-size: 0.9em.
+                        color: #888;
+                        font-size: 0.9em;
                     }}
                     .message-content {{
-                        margin-top: 5px.
+                        margin-top: 5px;
                     }}
                 </style>
             </head>
