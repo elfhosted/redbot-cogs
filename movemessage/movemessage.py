@@ -95,6 +95,8 @@ class MoveMessage(commands.Cog):
 
         if not messages_to_move:
             return await ctx.send("No messages found from the specified user.")
+        elif len(messages_to_move) < num_messages:
+            await ctx.send(f"Only found {len(messages_to_move)} messages from {user.display_name}.")
 
         for message in messages_to_move:
             await self.move_and_notify(ctx, message, target_channel)
