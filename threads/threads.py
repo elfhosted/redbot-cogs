@@ -46,7 +46,7 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
         allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.cog.elf_venger)])
 
         await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
-        await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
+        await interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
 
 
 class PrivateRequestApprovalView(discord.ui.View):
@@ -205,7 +205,7 @@ class Threads(commands.Cog):
 
         if hasattr(thread.parent, 'available_tags'):
             for tag in thread.parent.available_tags:
-                if tag.name.lower() == "open":
+                if (tag.name.lower() == "open"):
                     tags.append(tag)
             try:
                 await thread.edit(name=f"✋┆{username}", applied_tags=tags)
