@@ -30,19 +30,12 @@ class MoveMessage(commands.Cog):
         else:
             return None
 
-    def extract_channel_id(self, input_str):
-        url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/(\d+)\/\d+', input_str)
-        if url_match:
-            return int(url_match.group(1))
-        elif re.match(r'^\d+$', input_str):
-            return int(input_str)
-        else:
-            return None
-
-    def extract_thread_id(self, input_str):
+    def extract_channel_or_thread_id(self, input_str):
         url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/(\d+)\/(\d+)', input_str)
         if url_match:
             return int(url_match.group(2))
+        elif re.match(r'^\d+$', input_str):
+            return int(input_str)
         else:
             return None
 
@@ -69,16 +62,14 @@ class MoveMessage(commands.Cog):
             return await ctx.send(f"An error occurred while fetching the message: {e}")
 
         if target_channel is None and target_channel_url is not None:
-            channel_id = self.extract_channel_id(target_channel_url)
-            thread_id = self.extract_thread_id(target_channel_url)
-            if channel_id:
-                target_channel = self.bot.get_channel(channel_id)
-            elif thread_id:
-                target_channel = self.bot.get_channel(thread_id)
+            channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_url)
+            if channel_or_thread_id:
+                target_channel = self.bot.get_channel(channel_or_thread_id)
+                mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
 
         if target_channel is None:
             mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
-            return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
+            return await ctx.send(f"Invalid target channel. Please provide a valid channel mention or URL.")
 
         await self.move_and_notify(ctx, message, target_channel)
 
@@ -108,16 +99,14 @@ class MoveMessage(commands.Cog):
                 mylogger.debug(f"HTTP exception while fetching message with ID {message_id}: {e}")
 
         if target_channel is None and target_channel_url is not None:
-            channel_id = self.extract_channel_id(target_channel_url)
-            thread_id = self.extract_thread_id(target_channel_url)
-            if channel_id:
-                target_channel = self.bot.get_channel(channel_id)
-            elif thread_id:
-                target_channel = self.bot.get_channel(thread_id)
+            channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_url)
+            if channel_or_thread_id:
+                target_channel = self.bot.get_channel(channel_or_thread_id)
+                mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
 
         if target_channel is None:
             mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
-            return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
+            return await ctx.send(f"Invalid target channel. Please provide a valid channel mention or URL.")
 
         for message in messages_to_move:
             await self.move_and_notify(ctx, message, target_channel)
@@ -154,12 +143,10 @@ class MoveMessage(commands.Cog):
             await ctx.send(f"Only found {len(messages_to_move)} messages from {user.display_name}.")
 
         if target_channel is None and target_channel_url is not None:
-            channel_id = self.extract_channel_id(target_channel_url)
-            thread_id = self.extract_thread_id(target_channel_url)
-            if channel_id:
-                target_channel = self.bot.get_channel(channel_id)
-            elif thread_id:
-                target_channel = self.bot.get_channel(thread_id)
+            channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_url)
+            if channel_or_thread_id:
+                target_channel = self.bot.get_channel(channel_or_thread_id)
+                mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
 
         if target_channel is None:
             mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
