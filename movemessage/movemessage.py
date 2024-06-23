@@ -25,6 +25,15 @@ class MoveMessage(commands.Cog):
         url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/(\d+)\/\d+', input_str)
         if url_match:
             return int(url_match.group(1))
+        elif re.match(r'^\d+$', input_str):
+            return int(input_str)
+        else:
+            return None
+
+    def extract_thread_id(self, input_str):
+        url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/(\d+)\/(\d+)', input_str)
+        if url_match:
+            return int(url_match.group(2))
         else:
             return None
 
@@ -49,8 +58,11 @@ class MoveMessage(commands.Cog):
 
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
+            thread_id = self.extract_thread_id(target_channel_url)
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
+            elif thread_id:
+                target_channel = self.bot.get_channel(thread_id)
 
         if target_channel is None:
             return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
@@ -81,8 +93,11 @@ class MoveMessage(commands.Cog):
 
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
+            thread_id = self.extract_thread_id(target_channel_url)
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
+            elif thread_id:
+                target_channel = self.bot.get_channel(thread_id)
 
         if target_channel is None:
             return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
@@ -123,8 +138,11 @@ class MoveMessage(commands.Cog):
 
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
+            thread_id = self.extract_thread_id(target_channel_url)
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
+            elif thread_id:
+                target_channel = self.bot.get_channel(thread_id)
 
         if target_channel is None:
             return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
