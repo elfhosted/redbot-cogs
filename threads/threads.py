@@ -261,7 +261,7 @@ class Threads(commands.Cog):
         else:
             channel = ctx_or_interaction.channel
             member = ctx_or_interaction.user
-            send = ctx_or_interaction.followup.send
+            send = ctx_or_interaction.response.send_message
 
         if isinstance(channel, discord.Thread):
             channel_owner = channel.owner
