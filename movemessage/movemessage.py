@@ -31,16 +31,20 @@ class MoveMessage(commands.Cog):
             return None
 
     def extract_channel_or_thread_id(self, input_str):
-        url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/\d+\/(\d+)', input_str)
+        url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/(\d+)\/(\d+)', input_str)
         if url_match:
-            return int(url_match.group(1))
+            mylogger.debug(f"URL Match: {url_match.groups()}")
+            return int(url_match.group(2))
         else:
             mention_match = re.match(r'<#(\d+)>', input_str)
             if mention_match:
+                mylogger.debug(f"Mention Match: {mention_match.groups()}")
                 return int(mention_match.group(1))
             elif re.match(r'^\d+$', input_str):
+                mylogger.debug(f"Direct ID Match: {input_str}")
                 return int(input_str)
             else:
+                mylogger.debug("No Match Found")
                 return None
 
     async def fetch_target_channel(self, ctx, target_channel_or_url):
