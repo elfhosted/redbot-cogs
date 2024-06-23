@@ -46,7 +46,7 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
         allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.cog.elf_venger)])
 
         await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
-        await self.interaction.followup.send("Your request for private support has been sent.", ephemeral=True)
+        await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
 
 
 class PrivateRequestApprovalView(discord.ui.View):
@@ -72,7 +72,7 @@ class PrivateRequestApprovalView(discord.ui.View):
                 color=0xff0000
             )
             await interaction.channel.send(embed=embed)
-            await interaction.followup.send("You have denied the request for private support.", ephemeral=True)
+            await interaction.response.send_message("You have denied the request for private support.", ephemeral=True)
         else:
             await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
 
@@ -348,14 +348,14 @@ class Threads(commands.Cog):
 
             if user is None:
                 mylogger.error("User could not be determined.")
-                await interaction.followup.send("Could not determine the user to create the private thread for.", ephemeral=True)
+                await interaction.response.send_message("Could not determine the user to create the private thread for.", ephemeral=True)
                 return
 
             elfvenger = thread.guild.get_role(self.elf_venger)
             private_channel = self.bot.get_channel(self.ticket_thread_channel)
             if not private_channel:
                 mylogger.error("Private channel could not be found.")
-                await interaction.followup.send("Could not find the private channel.", ephemeral=True)
+                await interaction.response.send_message("Could not find the private channel.", ephemeral=True)
                 return
 
             new_thread = await private_channel.create_thread(name=new_thread_name)
@@ -423,9 +423,9 @@ class Threads(commands.Cog):
                 await thread.edit(name=new_thread_name, locked=True, archived=True)
             except discord.Forbidden:
                 mylogger.error("Missing permissions to lock and archive the thread.")
-                await interaction.followup.send("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
+                await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
-            await interaction.followup.send("This command can only be used in a thread.", ephemeral=True)
+            await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
 
 
     @app_commands.command(name="close-ticket")
@@ -564,7 +564,7 @@ class Threads(commands.Cog):
         except Exception as e:
             mylogger.exception("An error occurred in the close_ticket command", exc_info=e)
             try:
-                await interaction.followup.send("An unexpected error occurred. Please try again later.", ephemeral=True)
+                await interaction.response.send_message("An unexpected error occurred. Please try again later.", ephemeral=True)
             except discord.errors.Forbidden:
                 mylogger.error("Failed to send error message to user: Missing Access.")
 
