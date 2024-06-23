@@ -47,6 +47,7 @@ class MoveMessage(commands.Cog):
         message_id = self.extract_message_id(input_str)
 
         if message_id is None:
+            mylogger.debug("Invalid input for message ID or URL.")
             return await ctx.send("Invalid input. Please provide a valid message ID or URL.")
 
         try:
@@ -63,9 +64,10 @@ class MoveMessage(commands.Cog):
 
         if target_channel is None and target_channel_url is not None:
             channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_url)
+            mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
             if channel_or_thread_id:
                 target_channel = self.bot.get_channel(channel_or_thread_id)
-                mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
+                mylogger.debug(f"Fetched channel or thread: {target_channel}")
 
         if target_channel is None:
             mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
@@ -81,6 +83,7 @@ class MoveMessage(commands.Cog):
         message_ids = self.extract_message_ids(input_str)
 
         if not message_ids:
+            mylogger.debug("Invalid input for message IDs or URLs.")
             return await ctx.send("Invalid input. Please provide valid message IDs or URLs.")
 
         messages_to_move = []
@@ -100,9 +103,10 @@ class MoveMessage(commands.Cog):
 
         if target_channel is None and target_channel_url is not None:
             channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_url)
+            mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
             if channel_or_thread_id:
                 target_channel = self.bot.get_channel(channel_or_thread_id)
-                mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
+                mylogger.debug(f"Fetched channel or thread: {target_channel}")
 
         if target_channel is None:
             mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
@@ -138,15 +142,18 @@ class MoveMessage(commands.Cog):
                 break
 
         if not messages_to_move:
+            mylogger.debug(f"No messages found from user {user.display_name}.")
             return await ctx.send("No messages found from the specified user.")
         elif len(messages_to_move) < num_messages:
+            mylogger.debug(f"Only found {len(messages_to_move)} messages from user {user.display_name}.")
             await ctx.send(f"Only found {len(messages_to_move)} messages from {user.display_name}.")
 
         if target_channel is None and target_channel_url is not None:
             channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_url)
+            mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
             if channel_or_thread_id:
                 target_channel = self.bot.get_channel(channel_or_thread_id)
-                mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
+                mylogger.debug(f"Fetched channel or thread: {target_channel}")
 
         if target_channel is None:
             mylogger.debug(f"Invalid target channel or thread: {target_channel_url}")
