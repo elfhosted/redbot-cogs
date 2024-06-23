@@ -21,8 +21,15 @@ class MoveMessage(commands.Cog):
         else:
             return None
 
+    def extract_channel_id(self, input_str):
+        url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/(\d+)\/\d+', input_str)
+        if url_match:
+            return int(url_match.group(1))
+        else:
+            return None
+
     @commands.command(name="move")
-    async def move_message(self, ctx, input_str: str, target_channel: discord.TextChannel):
+    async def move_message(self, ctx, input_str: str, target_channel: discord.TextChannel = None, target_channel_url: str = None):
         if not await self.is_allowed(ctx):
             return await ctx.send("You do not have the required role to use this command.")
 
@@ -40,10 +47,18 @@ class MoveMessage(commands.Cog):
         except discord.HTTPException as e:
             return await ctx.send(f"An error occurred while fetching the message: {e}")
 
+        if target_channel is None and target_channel_url is not None:
+            channel_id = self.extract_channel_id(target_channel_url)
+            if channel_id:
+                target_channel = self.bot.get_channel(channel_id)
+
+        if target_channel is None:
+            return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
+
         await self.move_and_notify(ctx, message, target_channel)
 
     @commands.command(name="movemany")
-    async def move_many_messages(self, ctx, input_str: str, target_channel: discord.TextChannel):
+    async def move_many_messages(self, ctx, input_str: str, target_channel: discord.TextChannel = None, target_channel_url: str = None):
         if not await self.is_allowed(ctx):
             return await ctx.send("You do not have the required role to use this command.")
 
@@ -64,6 +79,14 @@ class MoveMessage(commands.Cog):
             except discord.HTTPException as e:
                 await ctx.send(f"An error occurred while fetching the message with ID {message_id}: {e}")
 
+        if target_channel is None and target_channel_url is not None:
+            channel_id = self.extract_channel_id(target_channel_url)
+            if channel_id:
+                target_channel = self.bot.get_channel(channel_id)
+
+        if target_channel is None:
+            return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
+
         for message in messages_to_move:
             await self.move_and_notify(ctx, message, target_channel)
 
@@ -79,7 +102,7 @@ class MoveMessage(commands.Cog):
         return list(set(message_ids))  # Remove duplicates
 
     @commands.command(name="movefromuser")
-    async def move_messages_from_user(self, ctx, user: discord.Member, num_messages: int, target_channel: discord.TextChannel):
+    async def move_messages_from_user(self, ctx, user: discord.Member, num_messages: int, target_channel: discord.TextChannel = None, target_channel_url: str = None):
         if not await self.is_allowed(ctx):
             return await ctx.send("You do not have the required role to use this command.")
 
@@ -97,6 +120,14 @@ class MoveMessage(commands.Cog):
             return await ctx.send("No messages found from the specified user.")
         elif len(messages_to_move) < num_messages:
             await ctx.send(f"Only found {len(messages_to_move)} messages from {user.display_name}.")
+
+        if target_channel is None and target_channel_url is not None:
+            channel_id = self.extract_channel_id(target_channel_url)
+            if channel_id:
+                target_channel = self.bot.get_channel(channel_id)
+
+        if target_channel is None:
+            return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
 
         for message in messages_to_move:
             await self.move_and_notify(ctx, message, target_channel)
