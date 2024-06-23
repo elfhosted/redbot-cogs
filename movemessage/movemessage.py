@@ -43,6 +43,23 @@ class MoveMessage(commands.Cog):
             else:
                 return None
 
+    async def fetch_target_channel(self, ctx, target_channel_or_url):
+        channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_or_url)
+        mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
+        if channel_or_thread_id:
+            target_channel = self.bot.get_channel(channel_or_thread_id)
+            if target_channel is None:
+                try:
+                    target_channel = await ctx.guild.fetch_channel(channel_or_thread_id)
+                except discord.NotFound:
+                    mylogger.debug(f"Channel or thread with ID {channel_or_thread_id} not found.")
+                    target_channel = None
+            mylogger.debug(f"Fetched channel or thread: {target_channel}")
+            return target_channel
+        else:
+            mylogger.debug(f"Invalid target channel or thread URL: {target_channel_or_url}")
+            return None
+
     @commands.command(name="move")
     async def move_message(self, ctx, input_str: str, target_channel_or_url: str):
         if not await self.is_allowed(ctx):
@@ -66,14 +83,9 @@ class MoveMessage(commands.Cog):
             mylogger.debug(f"HTTP exception while fetching message with ID {message_id}: {e}")
             return await ctx.send(f"An error occurred while fetching the message: {e}")
 
-        channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_or_url)
-        mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
-        if channel_or_thread_id:
-            target_channel = self.bot.get_channel(channel_or_thread_id)
-            mylogger.debug(f"Fetched channel or thread: {target_channel}")
+        target_channel = await self.fetch_target_channel(ctx, target_channel_or_url)
 
         if target_channel is None:
-            mylogger.debug(f"Invalid target channel or thread: {target_channel_or_url}")
             return await ctx.send(f"Invalid target channel. Please provide a valid channel mention or URL.")
 
         await self.move_and_notify(ctx, message, target_channel)
@@ -104,14 +116,9 @@ class MoveMessage(commands.Cog):
                 await ctx.send(f"An error occurred while fetching the message with ID {message_id}: {e}")
                 mylogger.debug(f"HTTP exception while fetching message with ID {message_id}: {e}")
 
-        channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_or_url)
-        mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
-        if channel_or_thread_id:
-            target_channel = self.bot.get_channel(channel_or_thread_id)
-            mylogger.debug(f"Fetched channel or thread: {target_channel}")
+        target_channel = await self.fetch_target_channel(ctx, target_channel_or_url)
 
         if target_channel is None:
-            mylogger.debug(f"Invalid target channel or thread: {target_channel_or_url}")
             return await ctx.send(f"Invalid target channel. Please provide a valid channel mention or URL.")
 
         for message in messages_to_move:
@@ -150,14 +157,9 @@ class MoveMessage(commands.Cog):
             mylogger.debug(f"Only found {len(messages_to_move)} messages from user {user.display_name}.")
             await ctx.send(f"Only found {len(messages_to_move)} messages from {user.display_name}.")
 
-        channel_or_thread_id = self.extract_channel_or_thread_id(target_channel_or_url)
-        mylogger.debug(f"Extracted channel or thread ID: {channel_or_thread_id}")
-        if channel_or_thread_id:
-            target_channel = self.bot.get_channel(channel_or_thread_id)
-            mylogger.debug(f"Fetched channel or thread: {target_channel}")
+        target_channel = await self.fetch_target_channel(ctx, target_channel_or_url)
 
         if target_channel is None:
-            mylogger.debug(f"Invalid target channel or thread: {target_channel_or_url}")
             return await ctx.send(f"Invalid target channel or thread: {target_channel_or_url}")
 
         for message in messages_to_move:
