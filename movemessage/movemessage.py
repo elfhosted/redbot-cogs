@@ -31,9 +31,9 @@ class MoveMessage(commands.Cog):
             return None
 
     def extract_channel_or_thread_id(self, input_str):
-        url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/(\d+)\/(\d+)', input_str)
+        url_match = re.match(r'https:\/\/discord\.com\/channels\/\d+\/\d+\/(\d+)', input_str)
         if url_match:
-            return int(url_match.group(2))
+            return int(url_match.group(1))
         else:
             mention_match = re.match(r'<#(\d+)>', input_str)
             if mention_match:
@@ -197,4 +197,3 @@ class MoveMessage(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(MoveMessage(bot))
-
