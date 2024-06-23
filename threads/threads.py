@@ -13,6 +13,7 @@ handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 mylogger.addHandler(handler)
+
 class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support"):
     def __init__(self, cog, interaction, *args, **kwargs):
         self.cog = cog
@@ -82,8 +83,8 @@ class Buttons(discord.ui.View):
         self.user_id = user_id
         super().__init__(timeout=timeout)
 
-    @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="Close Post")
-    async def gray_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+    @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="close_post")
+    async def close_post(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
         channel = interaction.channel
         if channel and isinstance(channel, discord.Thread):
             member = interaction.guild.get_member(interaction.user.id)
@@ -94,8 +95,8 @@ class Buttons(discord.ui.View):
             else:
                 await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
 
-    @discord.ui.button(label="Private Mode", style=discord.ButtonStyle.green, emoji="🔒", custom_id="Private Mode")
-    async def private_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
+    @discord.ui.button(label="Private Mode", style=discord.ButtonStyle.green, emoji="🔒", custom_id="private_mode")
+    async def private_mode(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
         member = interaction.guild.get_member(interaction.user.id)
         mylogger.info(f"Private button pressed by {interaction.user.name} (ID: {interaction.user.id})")
 
@@ -104,37 +105,6 @@ class Buttons(discord.ui.View):
         else:
             # Show a modal to get the reason for private support
             await interaction.response.send_modal(PrivateSupportReasonModal(cog=self.cog, interaction=interaction))
-
-
-class Buttons(discord.ui.View):
-    def __init__(self, cog, bot_role_id, user_id, *, timeout=None):
-        self.cog = cog
-        self.bot_role_id = bot_role_id
-        self.user_id = user_id
-        super().__init__(timeout=timeout)
-
-    @discord.ui.button(label="Close Post", style=discord.ButtonStyle.red, emoji="🔒", custom_id="Close Post")
-    async def gray_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
-        channel = interaction.channel
-        if channel and isinstance(channel, discord.Thread):
-            member = interaction.guild.get_member(interaction.user.id)
-            mylogger.info(f"Close button pressed by {interaction.user.name} (ID: {interaction.user.id}) with roles: {[role.id for role in member.roles]}")
-            mylogger.info(f"Required bot role ID: {self.bot_role_id}")
-            if interaction.user.id == self.user_id or any(role.id == self.bot_role_id for role in member.roles):
-                await self.cog._close(interaction)
-            else:
-                await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
-
-    @discord.ui.button(label="Private Mode", style=discord.ButtonStyle.green, emoji="🔒", custom_id="Private Mode")
-    async def private_button(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
-        member = interaction.guild.get_member(interaction.user.id)
-        mylogger.info(f"Private button pressed by {interaction.user.name} (ID: {interaction.user.id})")
-
-        if any(role.id == self.cog.elf_venger for role in member.roles):
-            await self.cog._make_private(interaction)
-        else:
-            await interaction.response.send_modal(PrivateSupportReasonModal(cog=self.cog, interaction=interaction))
-
 
 
 class Threads(commands.Cog):
@@ -463,7 +433,6 @@ class Threads(commands.Cog):
             await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
 
 
-
     @app_commands.command(name="close-ticket")
     @commands.has_permissions(manage_channels=True)
     async def close_ticket(self, interaction: discord.Interaction):
@@ -523,17 +492,17 @@ class Threads(commands.Cog):
                         padding: 10px 0;
                     }}
                     .message:last-child {{
-                        border-bottom: none;
+                        border-bottom: none.
                     }}
                     .message-author {{
-                        font-weight: bold;
+                        font-weight: bold.
                     }}
                     .message-timestamp {{
-                        color: #888;
-                        font-size: 0.9em;
+                        color: #888.
+                        font-size: 0.9em.
                     }}
                     .message-content {{
-                        margin-top: 5px;
+                        margin-top: 5px.
                     }}
                 </style>
             </head>
