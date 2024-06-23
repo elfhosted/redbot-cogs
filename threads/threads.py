@@ -46,7 +46,7 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
         allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.cog.elf_venger)])
 
         await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
-        await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
+        await self.interaction.followup.send("Your request for private support has been sent.", ephemeral=True)
 
 
 class PrivateRequestApprovalView(discord.ui.View):
@@ -72,7 +72,7 @@ class PrivateRequestApprovalView(discord.ui.View):
                 color=0xff0000
             )
             await interaction.channel.send(embed=embed)
-            await interaction.response.send_message("You have denied the request for private support.", ephemeral=True)
+            await interaction.followup.send("You have denied the request for private support.", ephemeral=True)
         else:
             await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
 
@@ -104,7 +104,6 @@ class Buttons(discord.ui.View):
         if any(role.id == self.cog.elf_venger for role in member.roles):
             await self.cog._make_private(interaction)
         else:
-            # Show a modal to get the reason for private support
             await interaction.response.send_modal(PrivateSupportReasonModal(cog=self.cog, interaction=interaction))
 
 
@@ -262,7 +261,7 @@ class Threads(commands.Cog):
         else:
             channel = ctx_or_interaction.channel
             member = ctx_or_interaction.user
-            send = ctx_or_interaction.response.send_message
+            send = ctx_or_interaction.followup.send
 
         if isinstance(channel, discord.Thread):
             channel_owner = channel.owner
@@ -298,12 +297,10 @@ class Threads(commands.Cog):
 
                         tags = [tag for tag in channel.parent.available_tags if tag.name.lower() == "closed"]
 
-                        # Remove all participants from the thread
                         members = await channel.fetch_members()
                         for thread_member in members:
                             await channel.remove_user(thread_member)
 
-                        # Archive and lock the thread
                         await channel.edit(name=new_thread_name, locked=True, archived=True, applied_tags=tags)
                     except Exception as e:
                         mylogger.exception("An error occurred while closing the thread", exc_info=e)
@@ -340,7 +337,6 @@ class Threads(commands.Cog):
 
             user = None
             if thread.owner.id == self.bot_uid:
-                # Extract the username from the thread name
                 match = re.search(r'✋┆(.+)', thread.name)
                 if match:
                     username = match.group(1).strip()
@@ -352,14 +348,14 @@ class Threads(commands.Cog):
 
             if user is None:
                 mylogger.error("User could not be determined.")
-                await interaction.response.send_message("Could not determine the user to create the private thread for.", ephemeral=True)
+                await interaction.followup.send("Could not determine the user to create the private thread for.", ephemeral=True)
                 return
 
             elfvenger = thread.guild.get_role(self.elf_venger)
             private_channel = self.bot.get_channel(self.ticket_thread_channel)
             if not private_channel:
                 mylogger.error("Private channel could not be found.")
-                await interaction.response.send_message("Could not find the private channel.", ephemeral=True)
+                await interaction.followup.send("Could not find the private channel.", ephemeral=True)
                 return
 
             new_thread = await private_channel.create_thread(name=new_thread_name)
@@ -416,22 +412,20 @@ class Threads(commands.Cog):
             await interaction.channel.send(embed=embed)
 
             try:
-                # Remove all participants from the thread except the original member
                 members = await interaction.channel.fetch_members()
                 for thread_member in members:
                     if thread_member.id != user.id:
                         await interaction.channel.remove_user(thread_member)
 
-                # Archive and lock the thread
                 closed_tag = next(tag for tag in interaction.channel.parent.available_tags if tag.name.lower() == "closed")
                 await thread.edit(name=new_thread_name, locked=True, archived=True, applied_tags=[closed_tag])
             except StopIteration:
                 await thread.edit(name=new_thread_name, locked=True, archived=True)
             except discord.Forbidden:
                 mylogger.error("Missing permissions to lock and archive the thread.")
-                await interaction.response.send_message("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
+                await interaction.followup.send("I don't have the necessary permissions to lock and archive the thread.", ephemeral=True)
         else:
-            await interaction.response.send_message("This command can only be used in a thread.", ephemeral=True)
+            await interaction.followup.send("This command can only be used in a thread.", ephemeral=True)
 
 
     @app_commands.command(name="close-ticket")
@@ -441,7 +435,6 @@ class Threads(commands.Cog):
         try:
             mylogger.info(f"close_ticket command invoked by {interaction.user.name} with roles: {[role.id for role in interaction.user.roles]}")
             
-            # Ensure the command is run in a thread within the specified parent or private channel
             if interaction.channel.type != discord.ChannelType.public_thread and interaction.channel.type != discord.ChannelType.private_thread:
                 mylogger.error("Command used in an invalid channel type.")
                 await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
@@ -453,7 +446,6 @@ class Threads(commands.Cog):
                 await interaction.response.send_message("This command can only be used in ticket threads.", ephemeral=True)
                 return
 
-            # Extract the user mention from the opening message
             async for message in interaction.channel.history(oldest_first=True, limit=1):
                 if message.content.startswith("Private thread created for"):
                     user_mention = message.content.split()[4]
@@ -562,7 +554,6 @@ class Threads(commands.Cog):
 
             await interaction.channel.send(embed=embed)
 
-            # Remove all participants from the thread except the original member
             members = await interaction.channel.fetch_members()
             for thread_member in members:
                 if thread_member.id != user.id:
@@ -573,7 +564,7 @@ class Threads(commands.Cog):
         except Exception as e:
             mylogger.exception("An error occurred in the close_ticket command", exc_info=e)
             try:
-                await interaction.response.send_message("An unexpected error occurred. Please try again later.", ephemeral=True)
+                await interaction.followup.send("An unexpected error occurred. Please try again later.", ephemeral=True)
             except discord.errors.Forbidden:
                 mylogger.error("Failed to send error message to user: Missing Access.")
 
