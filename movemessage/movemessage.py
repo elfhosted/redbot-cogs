@@ -43,6 +43,7 @@ class MoveMessage(commands.Cog):
             return await ctx.send("You do not have the required role to use this command.")
 
         message_id = self.extract_message_id(input_str)
+        await ctx.send(f"Debug: Extracted message ID {message_id}")
 
         if message_id is None:
             return await ctx.send("Invalid input. Please provide a valid message ID or URL.")
@@ -59,10 +60,14 @@ class MoveMessage(commands.Cog):
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
             thread_id = self.extract_thread_id(target_channel_url)
+            await ctx.send(f"Debug: Extracted channel ID {channel_id}, thread ID {thread_id}")
+
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
+                await ctx.send(f"Debug: Fetched target channel {target_channel}")
             elif thread_id:
                 target_channel = self.bot.get_channel(thread_id)
+                await ctx.send(f"Debug: Fetched target thread {target_channel}")
 
         if target_channel is None:
             return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
@@ -75,6 +80,7 @@ class MoveMessage(commands.Cog):
             return await ctx.send("You do not have the required role to use this command.")
 
         message_ids = self.extract_message_ids(input_str)
+        await ctx.send(f"Debug: Extracted message IDs {message_ids}")
 
         if not message_ids:
             return await ctx.send("Invalid input. Please provide valid message IDs or URLs.")
@@ -94,10 +100,14 @@ class MoveMessage(commands.Cog):
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
             thread_id = self.extract_thread_id(target_channel_url)
+            await ctx.send(f"Debug: Extracted channel ID {channel_id}, thread ID {thread_id}")
+
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
+                await ctx.send(f"Debug: Fetched target channel {target_channel}")
             elif thread_id:
                 target_channel = self.bot.get_channel(thread_id)
+                await ctx.send(f"Debug: Fetched target thread {target_channel}")
 
         if target_channel is None:
             return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
@@ -131,6 +141,8 @@ class MoveMessage(commands.Cog):
             if len(messages_to_move) >= num_messages:
                 break
 
+        await ctx.send(f"Debug: Found {len(messages_to_move)} messages from user {user.display_name}")
+
         if not messages_to_move:
             return await ctx.send("No messages found from the specified user.")
         elif len(messages_to_move) < num_messages:
@@ -139,10 +151,14 @@ class MoveMessage(commands.Cog):
         if target_channel is None and target_channel_url is not None:
             channel_id = self.extract_channel_id(target_channel_url)
             thread_id = self.extract_thread_id(target_channel_url)
+            await ctx.send(f"Debug: Extracted channel ID {channel_id}, thread ID {thread_id}")
+
             if channel_id:
                 target_channel = self.bot.get_channel(channel_id)
+                await ctx.send(f"Debug: Fetched target channel {target_channel}")
             elif thread_id:
                 target_channel = self.bot.get_channel(thread_id)
+                await ctx.send(f"Debug: Fetched target thread {target_channel}")
 
         if target_channel is None:
             return await ctx.send("Invalid target channel. Please provide a valid channel mention or URL.")
