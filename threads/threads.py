@@ -39,14 +39,16 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
         embed = discord.Embed(
             title="Private Support Request",
             description=f"{self.interaction.user.mention} is requesting private support for the following reason:\n\n"
-                        f"{self.children[1].value}\n\n",
+                        f"{self.children[1].value}\n\n"
+                        f"Please wait for an Elf-venger to review your request.",
             color=0x437820
         )
 
         allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.cog.elf_venger)])
 
         await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
-        await interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
+        await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
+
 
 
 class PrivateRequestApprovalView(discord.ui.View):
@@ -60,7 +62,7 @@ class PrivateRequestApprovalView(discord.ui.View):
         if any(role.id == self.cog.elf_venger for role in member.roles):
             await self.cog._make_private(interaction)
         else:
-            await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
+            await interaction.response.send_message("You don't have permission to use this button. Please wait for an Elf-venger to review your request", ephemeral=True)
 
     @discord.ui.button(label="Deny", style=discord.ButtonStyle.red, emoji="❌", custom_id="deny_request")
     async def deny_request(self, interaction: discord.Interaction, button: discord.ui.Button, **kwargs):
@@ -74,7 +76,7 @@ class PrivateRequestApprovalView(discord.ui.View):
             await interaction.channel.send(embed=embed)
             await interaction.response.send_message("You have denied the request for private support.", ephemeral=True)
         else:
-            await interaction.response.send_message("You don't have permission to use this button.", ephemeral=True)
+            await interaction.response.send_message("You don't have permission to use this button. Please wait for an Elf-venger to review your request", ephemeral=True)
 
 
 class Buttons(discord.ui.View):

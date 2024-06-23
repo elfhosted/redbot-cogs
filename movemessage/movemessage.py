@@ -35,6 +35,10 @@ class MoveMessage(commands.Cog):
             message = await ctx.channel.fetch_message(message_id)
         except discord.NotFound:
             return await ctx.send("Message not found.")
+        except discord.Forbidden:
+            return await ctx.send("I do not have permission to access this message.")
+        except discord.HTTPException as e:
+            return await ctx.send(f"An error occurred while fetching the message: {e}")
 
         await self.move_and_notify(ctx, message, target_channel)
 
@@ -55,6 +59,10 @@ class MoveMessage(commands.Cog):
                 messages_to_move.append(message)
             except discord.NotFound:
                 await ctx.send(f"Message with ID {message_id} not found.")
+            except discord.Forbidden:
+                await ctx.send(f"I do not have permission to access message with ID {message_id}.")
+            except discord.HTTPException as e:
+                await ctx.send(f"An error occurred while fetching the message with ID {message_id}: {e}")
 
         for message in messages_to_move:
             await self.move_and_notify(ctx, message, target_channel)
@@ -70,6 +78,27 @@ class MoveMessage(commands.Cog):
         message_ids.extend([int(url) for url in urls])
         return list(set(message_ids))  # Remove duplicates
 
+    @commands.command(name="movefromuser")
+    async def move_messages_from_user(self, ctx, user: discord.Member, num_messages: int, target_channel: discord.TextChannel):
+        if not await self.is_allowed(ctx):
+            return await ctx.send("You do not have the required role to use this command.")
+
+        def check(msg):
+            return msg.author == user
+
+        messages_to_move = []
+        async for message in ctx.channel.history(limit=200):
+            if check(message):
+                messages_to_move.append(message)
+            if len(messages_to_move) >= num_messages:
+                break
+
+        if not messages_to_move:
+            return await ctx.send("No messages found from the specified user.")
+
+        for message in messages_to_move:
+            await self.move_and_notify(ctx, message, target_channel)
+
     async def move_and_notify(self, ctx, message, target_channel):
         embed = discord.Embed(description=message.content, color=message.author.color)
         avatar_url = message.author.avatar.url if message.author.avatar else message.author.default_avatar.url
@@ -81,7 +110,10 @@ class MoveMessage(commands.Cog):
         if message.attachments:
             embed.set_image(url=message.attachments[0].url)
 
-        moved_message = await target_channel.send(embed=embed)
+        try:
+            moved_message = await target_channel.send(embed=embed)
+        except discord.HTTPException as e:
+            return await ctx.send(f"An error occurred while moving the message: {e}")
 
         note_embed = discord.Embed(
             description=f"Your message has been moved to {target_channel.mention} for reference:\n\n[Original Message]({moved_message.jump_url})",
@@ -89,7 +121,10 @@ class MoveMessage(commands.Cog):
         )
         note_embed.set_author(name=message.author.display_name, icon_url=avatar_url)
 
-        await ctx.send(content=message.author.mention, embed=note_embed)
+        try:
+            await ctx.send(content=message.author.mention, embed=note_embed)
+        except discord.HTTPException as e:
+            await ctx.send(f"An error occurred while notifying the user: {e}")
 
 async def setup(bot):
     await bot.add_cog(MoveMessage(bot))
