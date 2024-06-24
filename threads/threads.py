@@ -38,7 +38,7 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
         mylogger.debug("Modal submitted")
         embed = discord.Embed(
             title="Private Support Request",
-            description=f"{self.interaction.user.mention} is requesting private support for the following reason:\n\n"
+            description=f"{interaction.user.mention} is requesting private support for the following reason:\n\n"
                         f"{self.children[1].value}\n\n"
                         f"Please wait for an Elf-venger to review your request.",
             color=0x437820
@@ -46,9 +46,8 @@ class PrivateSupportReasonModal(discord.ui.Modal, title="Request Private Support
 
         allowed_mentions = discord.AllowedMentions(roles=[discord.Object(id=self.cog.elf_venger)])
 
-        await self.interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
-        await self.interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
-
+        await interaction.channel.send(content=f"<@&{self.cog.elf_venger}>", embed=embed, allowed_mentions=allowed_mentions, view=PrivateRequestApprovalView(cog=self.cog))
+        await interaction.response.send_message("Your request for private support has been sent.", ephemeral=True)
 
 
 class PrivateRequestApprovalView(discord.ui.View):
