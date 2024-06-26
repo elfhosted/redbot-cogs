@@ -1,11 +1,7 @@
-from .customembed import CustomEmbed
+from .custom_embed import setup, teardown
 
 async def setup(bot):
-    cog = CustomEmbed(bot)
-    bot.add_cog(cog)
-    bot.tree.add_command(cog.createembed)
-    bot.tree.add_command(cog.setembedconfig)
+    await setup(bot)
 
 async def teardown(bot):
-    bot.tree.remove_command("createembed")
-    bot.tree.remove_command("setembedconfig")
+    await teardown(bot)
