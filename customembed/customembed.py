@@ -3,6 +3,9 @@ from redbot.core import commands, app_commands, Config
 from discord import ui
 from datetime import datetime
 from typing import Literal
+import logging
+
+logger = logging.getLogger("custom_embed")
 
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721]
 COLOR_CHOICES = {
@@ -65,12 +68,16 @@ class CustomEmbed(commands.Cog):
     @app_commands.choices(color=[app_commands.Choice(name=k, value=k) for k in COLOR_CHOICES.keys()])
     async def createembed(self, interaction: discord.Interaction, color: Literal["Red", "Green", "Blue", "Yellow", "Default"]):
         """Create a custom embed."""
-        if not any(role.id in ALLOWED_ROLE_IDS for role in interaction.user.roles):
-            return await interaction.response.send_message("You do not have the required roles to use this command.", ephemeral=True)
+        try:
+            if not any(role.id in ALLOWED_ROLE_IDS for role in interaction.user.roles):
+                return await interaction.response.send_message("You do not have the required roles to use this command.", ephemeral=True)
 
-        guild_config = await self.config.guild(interaction.guild).all()
-        modal = CustomEmbedModal(self.bot, guild_config, color)
-        await interaction.response.send_modal(modal)
+            guild_config = await self.config.guild(interaction.guild).all()
+            modal = CustomEmbedModal(self.bot, guild_config, color)
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            logger.error(f"Error creating embed: {e}")
+            await interaction.response.send_message("An error occurred while creating the embed.", ephemeral=True)
 
     @app_commands.command()
     @app_commands.guild_only()
@@ -79,30 +86,36 @@ class CustomEmbed(commands.Cog):
         """Set the default embed color and image. Only for admins."""
         try:
             color = int(color, 16)
+            await self.config.guild(interaction.guild).default_color.set(color)
+            await self.config.guild(interaction.guild).default_image.set(image_url)
+            await interaction.response.send_message("Default embed color and image have been updated.", ephemeral=True)
         except ValueError:
-            return await interaction.response.send_message("Invalid color format. Please use a hexadecimal value.", ephemeral=True)
-
-        await self.config.guild(interaction.guild).default_color.set(color)
-        await self.config.guild(interaction.guild).default_image.set(image_url)
-        await interaction.response.send_message("Default embed color and image have been updated.", ephemeral=True)
+            await interaction.response.send_message("Invalid color format. Please use a hexadecimal value.", ephemeral=True)
+        except Exception as e:
+            logger.error(f"Error setting embed config: {e}")
+            await interaction.response.send_message("An error occurred while setting the embed config.", ephemeral=True)
 
     @app_commands.context_menu(name="Create Embed from Message")
     async def create_embed_from_message(self, interaction: discord.Interaction, message: discord.Message):
         """Create an embed using a message content."""
-        if not any(role.id in ALLOWED_ROLE_IDS for role in interaction.user.roles):
-            return await interaction.response.send_message("You do not have the required roles to use this command.", ephemeral=True)
+        try:
+            if not any(role.id in ALLOWED_ROLE_IDS for role in interaction.user.roles):
+                return await interaction.response.send_message("You do not have the required roles to use this command.", ephemeral=True)
 
-        guild_config = await self.config.guild(interaction.guild).all()
+            guild_config = await self.config.guild(interaction.guild).all()
 
-        embed = discord.Embed(
-            title="Embed from Message",
-            description=message.content,
-            color=guild_config["default_color"],
-            timestamp=datetime.utcnow()
-        )
-        embed.set_image(url=guild_config["default_image"])
+            embed = discord.Embed(
+                title="Embed from Message",
+                description=message.content,
+                color=guild_config["default_color"],
+                timestamp=datetime.utcnow()
+            )
+            embed.set_image(url=guild_config["default_image"])
 
-        await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            logger.error(f"Error creating embed from message: {e}")
+            await interaction.response.send_message("An error occurred while creating the embed from the message.", ephemeral=True)
 
 async def setup(bot):
     cog = CustomEmbed(bot)
@@ -110,8 +123,10 @@ async def setup(bot):
     bot.tree.add_command(cog.createembed)
     bot.tree.add_command(cog.setembedconfig)
     bot.tree.add_command(cog.create_embed_from_message)
+    await bot.tree.sync()
 
 async def teardown(bot):
     bot.tree.remove_command("createembed")
     bot.tree.remove_command("setembedconfig")
     bot.tree.remove_command("Create Embed from Message")
+    await bot.tree.sync()
