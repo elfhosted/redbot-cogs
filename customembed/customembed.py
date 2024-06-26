@@ -95,38 +95,27 @@ class CustomEmbed(commands.Cog):
             logger.error(f"Error setting embed config: {e}")
             await interaction.response.send_message("An error occurred while setting the embed config.", ephemeral=True)
 
-async def create_embed_from_message(interaction: discord.Interaction, message: discord.Message):
-    """Create an embed using a message content."""
-    try:
-        if not any(role.id in ALLOWED_ROLE_IDS for role in interaction.user.roles):
-            return await interaction.response.send_message("You do not have the required roles to use this command.", ephemeral=True)
+    @app_commands.context_menu(name="Create Embed from Message")
+    async def create_embed_from_message(self, interaction: discord.Interaction, message: discord.Message):
+        """Create an embed using a message content."""
+        try:
+            if not any(role.id in ALLOWED_ROLE_IDS for role in interaction.user.roles):
+                return await interaction.response.send_message("You do not have the required roles to use this command.", ephemeral=True)
 
-        guild_config = await interaction.client.get_cog("CustomEmbed").config.guild(interaction.guild).all()
+            guild_config = await self.config.guild(interaction.guild).all()
 
-        embed = discord.Embed(
-            title="Embed from Message",
-            description=message.content,
-            color=guild_config["default_color"],
-            timestamp=datetime.utcnow()
-        )
-        embed.set_image(url=guild_config["default_image"])
+            embed = discord.Embed(
+                title="Embed from Message",
+                description=message.content,
+                color=guild_config["default_color"],
+                timestamp=datetime.utcnow()
+            )
+            embed.set_image(url=guild_config["default_image"])
 
-        await interaction.response.send_message(embed=embed)
-    except Exception as e:
-        logger.error(f"Error creating embed from message: {e}")
-        await interaction.response.send_message("An error occurred while creating the embed from the message.", ephemeral=True)
+            await interaction.response.send_message(embed=embed)
+        except Exception as e:
+            logger.error(f"Error creating embed from message: {e}")
+            await interaction.response.send_message("An error occurred while creating the embed from the message.", ephemeral=True)
 
 async def setup(bot):
-    cog = CustomEmbed(bot)
-    bot.add_cog(cog)
-    bot.tree.add_command(cog.createembed)
-    bot.tree.add_command(cog.setembedconfig)
-    bot.tree.add_command(app_commands.ContextMenu(name="Create Embed from Message")(create_embed_from_message))
-    await bot.tree.sync()
-
-async def teardown(bot):
-    bot.remove_cog("CustomEmbed")
-    bot.tree.remove_command("createembed")
-    bot.tree.remove_command("setembedconfig")
-    bot.tree.remove_command("Create Embed from Message")
-    await bot.tree.sync()
+    await bot.add_cog(CustomEmbed(bot))
