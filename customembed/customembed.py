@@ -125,6 +125,7 @@ async def setup(bot):
     await bot.tree.sync()
 
 async def teardown(bot):
+    bot.remove_cog("CustomEmbed")
     bot.tree.remove_command("createembed")
     bot.tree.remove_command("setembedconfig")
     bot.tree.remove_command("Create Embed from Message")
