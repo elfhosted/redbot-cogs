@@ -4,7 +4,7 @@ import asyncio
 from redbot.core import commands, app_commands
 
 # 1247172016490938472 = elf-devs
-# 1198385945049825322 = elf-trainee
+# 1329915817558544404 = elf-trainee
 # 1252252269790105721 = elf-venger
 
 ALLOWED_ROLE_IDS = [1198381095553617922, 1252252269790105721, 1247172016490938472]
@@ -92,7 +92,7 @@ class RedBotCogSupport(commands.Cog):
                     forum_channel_id = 1245513340176961606
                     guild_id = 396055506072109067
                     elf_venger = 1198381095553617922
-                    elf_trainee_id = 1198385945049825322 # Elf Trainee Role
+                    elf_trainee_id = 1329915817558544404 # Elf Trainee Role
 
                 forum_channel = self.bot.get_channel(forum_channel_id)
                 if not forum_channel:

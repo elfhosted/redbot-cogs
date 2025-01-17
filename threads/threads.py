@@ -148,7 +148,7 @@ class Threads(commands.Cog):
             self.private_ticket_notify_channel = 1253214649592315955
             self.elf_trainee_id = 720195752650997771
         elif self.bot.user.id == 1250431337156837428:  # Spanky
-            self.role1 = 1198385945049825322  # Elf Trainees
+            self.role1 = 1329915817558544404  # Elf Trainees
             self.elf_venger = 1198381095553617922  # ElfVenger
             self.sponsor = 862041125706268702  # Sponsor - not used
             self.elf_friends = 1118645576884572303  # #elf-friends
@@ -156,7 +156,7 @@ class Threads(commands.Cog):
             self.ticket_thread_channel = 1253543483868971151  # #private-tickets
             self.private_ticket_transcripts = 1253542587613188216  # #elf-venger-transcripts
             self.private_ticket_notify_channel = 1253531682557001810  # #elf-venger-tix
-            self.elf_trainee_id = 1198385945049825322 # Elf Trainee Role
+            self.elf_trainee_id = 1329915817558544404 # Elf Trainee Role
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread):
