@@ -4,7 +4,7 @@
   "name": "elrondradar",
   "short": "Bridge staff Discord reactions to Elrond support radar.",
   "description": "Listens for staff reaction events and forwards supported status reactions to Elrond's OpenClaw webhook route.",
-  "requirements": ["aiohttp"],
+  "requirements": [],
   "permissions": ["Read Message History"],
   "tags": ["support", "elrond", "reactions"]
 }
