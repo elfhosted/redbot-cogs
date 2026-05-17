@@ -1,0 +1,10 @@
+{
+  "author": ["ElfHosted"],
+  "install_msg": "Elrond Radar installed. Configure with [p]elrondradar setendpoint <url> and [p]elrondradar settoken <token>, then [p]elrondradar enable.",
+  "name": "elrondradar",
+  "short": "Bridge staff Discord reactions to Elrond support radar.",
+  "description": "Listens for staff reaction events and forwards supported status reactions to Elrond's OpenClaw webhook route.",
+  "requirements": ["aiohttp"],
+  "permissions": ["Read Message History"],
+  "tags": ["support", "elrond", "reactions"]
+}
