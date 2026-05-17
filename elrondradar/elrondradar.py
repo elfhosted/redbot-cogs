@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Optional, Tuple
 
@@ -15,6 +16,79 @@ DEFAULT_ALLOWED_ROLE_IDS = [
     1247172016490938472,
 ]
 SUPPORTED_EMOJIS = {"🚨", "🐧", "👀", "🛠️", "🛠", "⏳", "✅", "📦", "🔁", "🔄"}
+DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
+DEFAULT_BACKEND_CHANNEL_ID = 1505438314340159489
+
+
+class DiagnosisRequestModal(discord.ui.Modal):
+    """Collect staff context before asking Elrond to spend diagnosis tokens."""
+
+    def __init__(self, cog, ticket_channel_id: int, ticket_channel_name: str, ticket_url: str, backend_thread_id: int, source_message_id: int):
+        super().__init__(title="Elrond diagnosis")
+        self.cog = cog
+        self.ticket_channel_id = ticket_channel_id
+        self.ticket_channel_name = ticket_channel_name
+        self.ticket_url = ticket_url
+        self.backend_thread_id = backend_thread_id
+        self.source_message_id = source_message_id
+        self.context = discord.ui.TextInput(
+            label="What should Elrond focus on?",
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=800,
+            placeholder="Optional. Add symptoms, suspicion, or what has already been checked.",
+        )
+        self.add_item(self.context)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild_id = interaction.guild.id if interaction.guild else await self.cog.config.guild_id()
+        data = {
+            "action": "diagnosis_requested",
+            "guild_id": str(guild_id),
+            "channel_id": str(self.ticket_channel_id),
+            "channel_name": self.ticket_channel_name,
+            "message_id": str(self.source_message_id),
+            "message_url": self.ticket_url,
+            "message_content": str(self.context.value or "").strip(),
+            "backend_thread_id": str(self.backend_thread_id),
+            "backend_thread_url": getattr(interaction.channel, "jump_url", ""),
+            "staff_discord_id": str(interaction.user.id),
+            "staff_display_name": getattr(interaction.user, "display_name", str(interaction.user)),
+        }
+        status, body = await self.cog._post_to_elrond(data)
+        if status is None:
+            await interaction.response.send_message("Elrond diagnosis request failed: endpoint or token is not configured.", ephemeral=True)
+        elif status >= 300:
+            await interaction.response.send_message(f"Elrond diagnosis request failed: HTTP {status} {body[:300]}", ephemeral=True)
+        else:
+            await interaction.response.send_message("Elrond diagnosis request queued.", ephemeral=True)
+
+
+class DiagnosisRequestView(discord.ui.View):
+    """Button wrapper that opens the diagnosis modal on demand."""
+
+    def __init__(self, cog, ticket_channel_id: int, ticket_channel_name: str, ticket_url: str, backend_thread_id: int, source_message_id: int):
+        super().__init__(timeout=None)
+        button = discord.ui.Button(
+            label="Activate Elrond diagnosis",
+            style=discord.ButtonStyle.primary,
+            custom_id=f"elrondradar:diagnose:{ticket_channel_id}",
+        )
+
+        async def callback(interaction: discord.Interaction):
+            if interaction.guild is None:
+                await interaction.response.send_message("Run this from the ElfHosted guild.", ephemeral=True)
+                return
+            member = interaction.user if isinstance(interaction.user, discord.Member) else None
+            if not await cog._is_allowed_staff(interaction.guild, interaction.user.id, member):
+                await interaction.response.send_message("Only authorised staff can activate Elrond diagnosis.", ephemeral=True)
+                return
+            await interaction.response.send_modal(
+                DiagnosisRequestModal(cog, ticket_channel_id, ticket_channel_name, ticket_url, backend_thread_id, source_message_id)
+            )
+
+        button.callback = callback
+        self.add_item(button)
 
 
 class ElrondRadar(commands.Cog):
@@ -30,6 +104,10 @@ class ElrondRadar(commands.Cog):
             guild_id=396055506072109067,
             allowed_user_ids=DEFAULT_ALLOWED_USER_IDS,
             allowed_role_ids=DEFAULT_ALLOWED_ROLE_IDS,
+            ticket_category_id=DEFAULT_TICKET_CATEGORY_ID,
+            backend_channel_id=DEFAULT_BACKEND_CHANNEL_ID,
+            announce_ticket_link=True,
+            tracked_ticket_channel_ids=[],
         )
 
     def _reactions_intent_state(self) -> str:
@@ -81,9 +159,24 @@ class ElrondRadar(commands.Cog):
             f"- guild_id: {cfg.get('guild_id')}\n"
             f"- token: {token_state}\n"
             f"- reactions intent: {self._reactions_intent_state()}\n"
+            f"- ticket category: {cfg.get('ticket_category_id')}\n"
+            f"- backend channel: {cfg.get('backend_channel_id')}\n"
+            f"- announce ticket link: {cfg.get('announce_ticket_link')}\n"
             f"- allowed users: {len(cfg.get('allowed_user_ids') or [])}\n"
             f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}"
         )
+
+    @elrondradar.command(name="setticketcategory")
+    async def setticketcategory(self, ctx, category_id: int):
+        """Set the Discord category ID watched for fresh support tickets."""
+        await self.config.ticket_category_id.set(category_id)
+        await ctx.send("Elrond radar ticket category updated.")
+
+    @elrondradar.command(name="setbackendchannel")
+    async def setbackendchannel(self, ctx, channel_id: int):
+        """Set the staff backend channel where intake threads are created."""
+        await self.config.backend_channel_id.set(channel_id)
+        await ctx.send("Elrond radar backend channel updated.")
 
     @elrondradar.command(name="test")
     async def test(self, ctx, channel_id: int, message_id: int, emoji: str = "👀"):
@@ -176,13 +269,17 @@ class ElrondRadar(commands.Cog):
             "Accept": "application/json",
         }
         async with aiohttp.ClientSession() as session:
-            async with session.post(endpoint_url, json=data, headers=headers, timeout=10) as response:
-                text = await response.text()
-                if response.status >= 300:
-                    log.warning("Elrond radar webhook failed: HTTP %s %s", response.status, text[:500])
-                else:
-                    log.info("Elrond radar webhook accepted: %s", text[:500])
-                return response.status, text
+            try:
+                async with session.post(endpoint_url, json=data, headers=headers, timeout=10) as response:
+                    text = await response.text()
+                    if response.status >= 300:
+                        log.warning("Elrond radar webhook failed: HTTP %s %s", response.status, text[:500])
+                    else:
+                        log.info("Elrond radar webhook accepted: %s", text[:500])
+                    return response.status, text
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                log.warning("Elrond radar webhook request failed: %s", exc)
+                return 599, str(exc)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -191,6 +288,10 @@ class ElrondRadar(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
         await self._handle_reaction(payload, action="removed")
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        await self._handle_ticket_channel_create(channel)
 
     async def _handle_reaction(self, payload: discord.RawReactionActionEvent, action: str):
         if not await self.config.enabled():
@@ -232,6 +333,101 @@ class ElrondRadar(commands.Cog):
             payload.user_id,
         )
         await self._post_to_elrond(data)
+
+    async def _handle_ticket_channel_create(self, channel: discord.abc.GuildChannel):
+        if not await self.config.enabled():
+            return
+        guild = getattr(channel, "guild", None)
+        if guild is None or guild.id != await self.config.guild_id():
+            return
+        if getattr(channel, "category_id", None) != await self.config.ticket_category_id():
+            return
+        if not hasattr(channel, "send") or not hasattr(channel, "history"):
+            return
+
+        tracked = set(await self.config.tracked_ticket_channel_ids())
+        if channel.id in tracked:
+            return
+        tracked.add(channel.id)
+        await self.config.tracked_ticket_channel_ids.set(list(tracked)[-500:])
+
+        await asyncio.sleep(5)
+        first_message = await self._first_channel_message(channel)
+        backend_thread = await self._create_backend_thread(channel, first_message)
+        if backend_thread is None:
+            log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
+            return
+
+        if await self.config.announce_ticket_link():
+            try:
+                await channel.send(
+                    "Staff backend thread: " + backend_thread.jump_url,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+            except (discord.Forbidden, discord.HTTPException) as exc:
+                log.warning("Elrond radar could not announce backend thread in ticket %s: %s", channel.id, exc)
+
+        source_message_id = first_message.id if first_message is not None else channel.id
+        ticket_url = first_message.jump_url if first_message is not None else getattr(channel, "jump_url", "")
+        await backend_thread.send(
+            "Ticket intake for " + channel.mention + "\n"
+            "Source: " + ticket_url + "\n\n"
+            "Use the button only when staff want Elrond to run diagnosis.",
+            view=DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+
+        await self._post_to_elrond({
+            "action": "ticket_created",
+            "guild_id": str(guild.id),
+            "channel_id": str(channel.id),
+            "channel_name": getattr(channel, "name", str(channel.id)),
+            "message_id": str(source_message_id),
+            "message_url": ticket_url,
+            "message_author_id": str(first_message.author.id) if first_message is not None else "",
+            "message_author_name": str(first_message.author) if first_message is not None else "",
+            "message_content": first_message.content if first_message is not None else "",
+            "backend_thread_id": str(backend_thread.id),
+            "backend_thread_url": backend_thread.jump_url,
+            "staff_discord_id": str(self.bot.user.id if self.bot.user else 0),
+            "staff_display_name": "Elrond Radar",
+        })
+
+    async def _first_channel_message(self, channel) -> Optional[discord.Message]:
+        try:
+            async for message in channel.history(limit=1, oldest_first=True):
+                return message
+        except (discord.Forbidden, discord.HTTPException):
+            return None
+        return None
+
+    async def _create_backend_thread(self, ticket_channel, first_message: Optional[discord.Message]):
+        backend_channel = self.bot.get_channel(await self.config.backend_channel_id())
+        if backend_channel is None and ticket_channel.guild is not None:
+            try:
+                backend_channel = await ticket_channel.guild.fetch_channel(await self.config.backend_channel_id())
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                return None
+        if backend_channel is None or not hasattr(backend_channel, "create_thread"):
+            return None
+
+        raw_name = getattr(ticket_channel, "name", str(ticket_channel.id))
+        thread_name = ("intake-" + raw_name)[:90]
+        try:
+            return await backend_channel.create_thread(
+                name=thread_name,
+                type=discord.ChannelType.public_thread,
+                reason="Elrond support ticket intake",
+            )
+        except (discord.Forbidden, discord.HTTPException):
+            try:
+                return await backend_channel.create_thread(
+                    name=thread_name,
+                    type=discord.ChannelType.private_thread,
+                    reason="Elrond support ticket intake",
+                )
+            except (discord.Forbidden, discord.HTTPException):
+                return None
 
     def _build_payload(
         self,
