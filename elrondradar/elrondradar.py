@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 
 import aiohttp
 import discord
@@ -31,6 +31,14 @@ class ElrondRadar(commands.Cog):
             allowed_user_ids=DEFAULT_ALLOWED_USER_IDS,
             allowed_role_ids=DEFAULT_ALLOWED_ROLE_IDS,
         )
+
+    def _reactions_intent_state(self) -> str:
+        intents = getattr(self.bot, "intents", None)
+        if intents is None:
+            return "unknown"
+        if hasattr(intents, "reactions"):
+            return str(getattr(intents, "reactions"))
+        return str(getattr(intents, "guild_reactions", "unknown"))
 
     @commands.group(name="elrondradar")
     @commands.admin_or_permissions(manage_guild=True)
@@ -72,9 +80,58 @@ class ElrondRadar(commands.Cog):
             f"- endpoint: {cfg.get('endpoint_url')}\n"
             f"- guild_id: {cfg.get('guild_id')}\n"
             f"- token: {token_state}\n"
+            f"- reactions intent: {self._reactions_intent_state()}\n"
             f"- allowed users: {len(cfg.get('allowed_user_ids') or [])}\n"
             f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}"
         )
+
+    @elrondradar.command(name="test")
+    async def test(self, ctx, channel_id: int, message_id: int, emoji: str = "👀"):
+        """Send a synthetic radar event for a specific Discord message."""
+        if ctx.guild is None:
+            await ctx.send("Run this in the configured guild.")
+            return
+        if ctx.guild.id != await self.config.guild_id():
+            await ctx.send("This server is not the configured Elrond radar guild.")
+            return
+        if emoji not in SUPPORTED_EMOJIS:
+            await ctx.send(f"Unsupported radar emoji: {emoji}")
+            return
+
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await ctx.guild.fetch_channel(channel_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
+                await ctx.send(f"Could not fetch channel {channel_id}: {type(exc).__name__}")
+                return
+        if not hasattr(channel, "fetch_message"):
+            await ctx.send(f"Channel {channel_id} cannot fetch messages.")
+            return
+
+        try:
+            message = await channel.fetch_message(message_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
+            await ctx.send(f"Could not fetch message {message_id}: {type(exc).__name__}")
+            return
+
+        data = self._build_payload(
+            action="added",
+            guild_id=ctx.guild.id,
+            channel_id=channel_id,
+            message_id=message_id,
+            emoji=emoji,
+            staff_id=ctx.author.id,
+            staff_display_name=getattr(ctx.author, "display_name", str(ctx.author)),
+            message=message,
+        )
+        status, body = await self._post_to_elrond(data)
+        if status is None:
+            await ctx.send("Elrond radar test failed: endpoint or token is not configured.")
+        elif status >= 300:
+            await ctx.send(f"Elrond radar test failed: HTTP {status} {body[:300]}")
+        else:
+            await ctx.send(f"Elrond radar test accepted: HTTP {status}")
 
     async def _is_allowed_staff(self, guild: discord.Guild, user_id: int, member: Optional[discord.Member]) -> bool:
         allowed_user_ids = set(await self.config.allowed_user_ids())
@@ -106,12 +163,12 @@ class ElrondRadar(commands.Cog):
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             return None
 
-    async def _post_to_elrond(self, data: dict) -> None:
+    async def _post_to_elrond(self, data: dict) -> Tuple[Optional[int], str]:
         endpoint_url = (await self.config.endpoint_url()).strip()
         gateway_token = (await self.config.gateway_token()).strip()
         if not endpoint_url or not gateway_token:
             log.warning("Elrond radar endpoint or token is not configured")
-            return
+            return None, "endpoint or token is not configured"
 
         headers = {
             "Authorization": f"Bearer {gateway_token}",
@@ -124,7 +181,8 @@ class ElrondRadar(commands.Cog):
                 if response.status >= 300:
                     log.warning("Elrond radar webhook failed: HTTP %s %s", response.status, text[:500])
                 else:
-                    log.debug("Elrond radar webhook accepted: %s", text[:500])
+                    log.info("Elrond radar webhook accepted: %s", text[:500])
+                return response.status, text
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
@@ -155,27 +213,56 @@ class ElrondRadar(commands.Cog):
             return
 
         message = await self._fetch_message(payload)
-        channel = message.channel if message is not None else self.bot.get_channel(payload.channel_id)
-        channel_name = getattr(channel, "name", str(payload.channel_id))
+        data = self._build_payload(
+            action=action,
+            guild_id=payload.guild_id,
+            channel_id=payload.channel_id,
+            message_id=payload.message_id,
+            emoji=emoji,
+            staff_id=payload.user_id,
+            staff_display_name=member.display_name if member is not None else str(payload.user_id),
+            message=message,
+        )
+        log.info(
+            "Elrond radar reaction accepted locally: action=%s emoji=%s channel=%s message=%s user=%s",
+            action,
+            emoji,
+            payload.channel_id,
+            payload.message_id,
+            payload.user_id,
+        )
+        await self._post_to_elrond(data)
+
+    def _build_payload(
+        self,
+        action: str,
+        guild_id: int,
+        channel_id: int,
+        message_id: int,
+        emoji: str,
+        staff_id: int,
+        staff_display_name: str,
+        message: Optional[discord.Message],
+    ) -> dict:
+        channel = message.channel if message is not None else self.bot.get_channel(channel_id)
+        channel_name = getattr(channel, "name", str(channel_id))
         message_author = message.author if message is not None else None
         jump_url = (
             message.jump_url
             if message is not None
-            else f"https://discord.com/channels/{payload.guild_id}/{payload.channel_id}/{payload.message_id}"
+            else f"https://discord.com/channels/{guild_id}/{channel_id}/{message_id}"
         )
-
-        data = {
+        return {
             "action": action,
-            "guild_id": str(payload.guild_id),
-            "channel_id": str(payload.channel_id),
+            "guild_id": str(guild_id),
+            "channel_id": str(channel_id),
             "channel_name": channel_name,
-            "message_id": str(payload.message_id),
+            "message_id": str(message_id),
             "message_url": jump_url,
             "message_author_id": str(message_author.id) if message_author else "",
             "message_author_name": str(message_author) if message_author else "",
             "message_content": message.content if message is not None else "",
             "emoji": emoji,
-            "staff_discord_id": str(payload.user_id),
-            "staff_display_name": member.display_name if member is not None else str(payload.user_id),
+            "staff_discord_id": str(staff_id),
+            "staff_display_name": staff_display_name,
         }
-        await self._post_to_elrond(data)
