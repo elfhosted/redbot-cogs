@@ -226,6 +226,43 @@ class ElrondRadar(commands.Cog):
         else:
             await ctx.send(f"Elrond radar test accepted: HTTP {status}")
 
+    @elrondradar.command(name="findtest")
+    async def findtest(self, ctx, message_id: int, emoji: str = "👀"):
+        """Find a message by ID across visible guild channels, then send a synthetic radar event."""
+        if ctx.guild is None:
+            await ctx.send("Run this in the configured guild.")
+            return
+        if ctx.guild.id != await self.config.guild_id():
+            await ctx.send("This server is not the configured Elrond radar guild.")
+            return
+        if emoji not in SUPPORTED_EMOJIS:
+            await ctx.send(f"Unsupported radar emoji: {emoji}")
+            return
+
+        async with ctx.typing():
+            message = await self._find_message_in_guild(ctx.guild, message_id)
+        if message is None:
+            await ctx.send(f"Could not find message {message_id} in channels Redbot can read.")
+            return
+
+        data = self._build_payload(
+            action="added",
+            guild_id=ctx.guild.id,
+            channel_id=message.channel.id,
+            message_id=message_id,
+            emoji=emoji,
+            staff_id=ctx.author.id,
+            staff_display_name=getattr(ctx.author, "display_name", str(ctx.author)),
+            message=message,
+        )
+        status, body = await self._post_to_elrond(data)
+        if status is None:
+            await ctx.send("Elrond radar findtest failed: endpoint or token is not configured.")
+        elif status >= 300:
+            await ctx.send(f"Elrond radar findtest failed: HTTP {status} {body[:300]}")
+        else:
+            await ctx.send(f"Elrond radar findtest accepted: HTTP {status} in <#{message.channel.id}>")
+
     async def _is_allowed_staff(self, guild: discord.Guild, user_id: int, member: Optional[discord.Member]) -> bool:
         allowed_user_ids = set(await self.config.allowed_user_ids())
         if user_id in allowed_user_ids:
@@ -255,6 +292,26 @@ class ElrondRadar(commands.Cog):
             return await channel.fetch_message(payload.message_id)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             return None
+
+    async def _find_message_in_guild(self, guild: discord.Guild, message_id: int) -> Optional[discord.Message]:
+        seen_channel_ids = set()
+        channels = []
+        for channel in list(getattr(guild, "text_channels", [])) + list(getattr(guild, "threads", [])):
+            channel_id = getattr(channel, "id", None)
+            if channel_id in seen_channel_ids:
+                continue
+            seen_channel_ids.add(channel_id)
+            if hasattr(channel, "fetch_message"):
+                channels.append(channel)
+
+        for channel in channels:
+            try:
+                return await channel.fetch_message(message_id)
+            except discord.NotFound:
+                continue
+            except (discord.Forbidden, discord.HTTPException):
+                continue
+        return None
 
     async def _post_to_elrond(self, data: dict) -> Tuple[Optional[int], str]:
         endpoint_url = (await self.config.endpoint_url()).strip()
