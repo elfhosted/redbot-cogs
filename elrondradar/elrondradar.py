@@ -14,7 +14,7 @@ DEFAULT_ALLOWED_ROLE_IDS = [
     1252252269790105721,
     1247172016490938472,
 ]
-SUPPORTED_EMOJIS = {"🚨", "👀", "🛠️", "🛠", "⏳", "✅", "📦", "🔁", "🔄"}
+SUPPORTED_EMOJIS = {"🚨", "🐧", "👀", "🛠️", "🛠", "⏳", "✅", "📦", "🔁", "🔄"}
 
 
 class ElrondRadar(commands.Cog):
