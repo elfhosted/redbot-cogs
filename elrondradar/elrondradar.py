@@ -362,6 +362,8 @@ class ElrondRadar(commands.Cog):
     @app_commands.describe(target="Discord mention/ID or ElfHosted username", note="Staff-only note to attach to future intakes")
     async def usernote_add(self, ctx: commands.Context, target: str, *, note: str):
         """Add a staff note for a Discord user or ElfHosted username."""
+        if await self._block_prefix_usernote_in_ticket(ctx):
+            return
         if not await self._ctx_is_allowed_staff(ctx):
             await ctx.send("Only authorised staff can manage user notes.", ephemeral=True)
             return
@@ -375,10 +377,12 @@ class ElrondRadar(commands.Cog):
         saved = await self._add_user_note(key, label, note, ctx.author, ctx.channel)
         await ctx.send(f"Saved note for {saved['label']}.", ephemeral=True)
 
-    @commands.hybrid_command(name="usernote-here")
+    @commands.hybrid_command(name="usernote")
     @app_commands.describe(note="Staff-only note for the user inferred from this ticket or intake thread")
-    async def usernote_here(self, ctx: commands.Context, *, note: str):
+    async def usernote(self, ctx: commands.Context, *, note: str):
         """Add a staff note for the user inferred from the current ticket/intake context."""
+        if await self._block_prefix_usernote_in_ticket(ctx):
+            return
         if not await self._ctx_is_allowed_staff(ctx):
             await ctx.send("Only authorised staff can manage user notes.", ephemeral=True)
             return
@@ -396,6 +400,8 @@ class ElrondRadar(commands.Cog):
     @app_commands.describe(target="Optional Discord mention/ID or ElfHosted username; omit in ticket/intake context")
     async def usernote_list(self, ctx: commands.Context, target: Optional[str] = None):
         """List staff notes for a Discord user or ElfHosted username."""
+        if await self._block_prefix_usernote_in_ticket(ctx):
+            return
         if not await self._ctx_is_allowed_staff(ctx):
             await ctx.send("Only authorised staff can view user notes.", ephemeral=True)
             return
@@ -428,6 +434,24 @@ class ElrondRadar(commands.Cog):
             return False
         member = ctx.author if isinstance(ctx.author, discord.Member) else None
         return await self._is_allowed_staff(ctx.guild, ctx.author.id, member)
+
+    async def _block_prefix_usernote_in_ticket(self, ctx: commands.Context) -> bool:
+        if getattr(ctx, "interaction", None) is not None:
+            return False
+        if getattr(ctx.channel, "category_id", None) != await self.config.ticket_category_id():
+            return False
+        try:
+            await ctx.message.delete()
+        except (discord.Forbidden, discord.HTTPException, AttributeError):
+            pass
+        try:
+            await ctx.author.send("Use the slash command `/usernote`, `/usernote-add`, or `/usernote-list` in ticket channels so the response is only visible to you.")
+        except (discord.Forbidden, discord.HTTPException, AttributeError):
+            try:
+                await ctx.send("Use the slash command for user notes in ticket channels.", delete_after=10)
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+        return True
 
     async def _note_key_from_target(self, guild: Optional[discord.Guild], target: str) -> Tuple[str, str]:
         value = str(target or "").strip()
