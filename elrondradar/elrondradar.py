@@ -358,7 +358,7 @@ class ElrondRadar(commands.Cog):
         else:
             await ctx.send(f"Elrond radar findtest accepted: HTTP {status} in <#{message.channel.id}>")
 
-    @commands.command(name="usernote-add")
+    @commands.command(name="usernote-prefix-add")
     async def usernote_add(self, ctx: commands.Context, target: str, note: str):
         """Add a staff note for a Discord user or ElfHosted username."""
         if await self._block_prefix_usernote_in_ticket(ctx):
@@ -376,7 +376,7 @@ class ElrondRadar(commands.Cog):
         saved = await self._add_user_note(key, label, note, ctx.author, ctx.channel)
         await self._send_private(ctx, f"Saved note for {saved['label']}.")
 
-    @commands.command(name="usernote")
+    @commands.command(name="usernote-prefix")
     async def usernote(self, ctx: commands.Context, note: str):
         """Add a staff note for the user inferred from the current ticket/intake context."""
         if await self._block_prefix_usernote_in_ticket(ctx):
@@ -394,7 +394,7 @@ class ElrondRadar(commands.Cog):
         saved = await self._add_user_note(key, label, note, ctx.author, ctx.channel)
         await self._send_private(ctx, f"Saved note for {saved['label']}.")
 
-    @commands.command(name="usernote-list")
+    @commands.command(name="usernote-prefix-list")
     async def usernote_list(self, ctx: commands.Context, target: Optional[str] = None):
         """List staff notes for a Discord user or ElfHosted username."""
         if await self._block_prefix_usernote_in_ticket(ctx):
@@ -412,7 +412,7 @@ class ElrondRadar(commands.Cog):
         block = await self._format_user_notes_for_keys([key], heading=f"Notes for {label}")
         await self._send_private(ctx, block or f"No notes for {label}.")
 
-    @commands.command(name="usernote-delete")
+    @commands.command(name="usernote-prefix-delete")
     async def usernote_delete(self, ctx: commands.Context, number: int, target: Optional[str] = None):
         """Delete a staff note by number from /usernote-list."""
         if await self._block_prefix_usernote_in_ticket(ctx):
