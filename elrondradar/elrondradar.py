@@ -640,7 +640,7 @@ class ElrondRadar(commands.Cog):
                 if name and value:
                     formatted = f"{name}: {value}"
                     if self._is_ticket_request_field(name):
-                        priority_parts.append(formatted)
+                        priority_parts.append(value)
                     else:
                         parts.append(formatted)
                 elif value:
