@@ -178,6 +178,37 @@ class ElrondRadar(commands.Cog):
         await self.config.backend_channel_id.set(channel_id)
         await ctx.send("Elrond radar backend channel updated.")
 
+    @elrondradar.command(name="cleartickets")
+    async def cleartickets(self, ctx):
+        """Clear tracked ticket IDs so category scan/create can retry intake."""
+        await self.config.tracked_ticket_channel_ids.set([])
+        await ctx.send("Elrond radar tracked ticket cache cleared.")
+
+    @elrondradar.command(name="scantickets")
+    async def scantickets(self, ctx, limit: int = 25, force: bool = False):
+        """Scan configured ticket category and create missing backend intake threads."""
+        if ctx.guild is None:
+            await ctx.send("Run this in the configured guild.")
+            return
+        if ctx.guild.id != await self.config.guild_id():
+            await ctx.send("This server is not the configured Elrond radar guild.")
+            return
+
+        category_id = await self.config.ticket_category_id()
+        candidates = [
+            channel for channel in getattr(ctx.guild, "text_channels", [])
+            if getattr(channel, "category_id", None) == category_id
+        ]
+        candidates = sorted(candidates, key=lambda channel: getattr(channel, "created_at", None) or discord.utils.utcnow(), reverse=True)
+        processed = 0
+        attempted = 0
+        async with ctx.typing():
+            for channel in candidates[: max(1, min(limit, 100))]:
+                attempted += 1
+                if await self._handle_ticket_channel_create(channel, force=force):
+                    processed += 1
+        await ctx.send(f"Elrond radar ticket scan complete: processed {processed}/{attempted} visible channel(s) in category {category_id}. force={force}")
+
     @elrondradar.command(name="test")
     async def test(self, ctx, channel_id: int, message_id: int, emoji: str = "👀"):
         """Send a synthetic radar event for a specific Discord message."""
@@ -391,29 +422,27 @@ class ElrondRadar(commands.Cog):
         )
         await self._post_to_elrond(data)
 
-    async def _handle_ticket_channel_create(self, channel: discord.abc.GuildChannel):
+    async def _handle_ticket_channel_create(self, channel: discord.abc.GuildChannel, force: bool = False) -> bool:
         if not await self.config.enabled():
-            return
+            return False
         guild = getattr(channel, "guild", None)
         if guild is None or guild.id != await self.config.guild_id():
-            return
+            return False
         if getattr(channel, "category_id", None) != await self.config.ticket_category_id():
-            return
+            return False
         if not hasattr(channel, "send") or not hasattr(channel, "history"):
-            return
+            return False
 
         tracked = set(await self.config.tracked_ticket_channel_ids())
-        if channel.id in tracked:
-            return
-        tracked.add(channel.id)
-        await self.config.tracked_ticket_channel_ids.set(list(tracked)[-500:])
+        if channel.id in tracked and not force:
+            return False
 
         await asyncio.sleep(5)
         first_message = await self._first_channel_message(channel)
         backend_thread = await self._create_backend_thread(channel, first_message)
         if backend_thread is None:
             log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
-            return
+            return False
 
         if await self.config.announce_ticket_link():
             try:
@@ -434,7 +463,7 @@ class ElrondRadar(commands.Cog):
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
-        await self._post_to_elrond({
+        status, body = await self._post_to_elrond({
             "action": "ticket_created",
             "guild_id": str(guild.id),
             "channel_id": str(channel.id),
@@ -449,6 +478,13 @@ class ElrondRadar(commands.Cog):
             "staff_discord_id": str(self.bot.user.id if self.bot.user else 0),
             "staff_display_name": "Elrond Radar",
         })
+        if status is not None and status < 300:
+            tracked.add(channel.id)
+            await self.config.tracked_ticket_channel_ids.set(list(tracked)[-500:])
+            log.info("Elrond radar ticket intake completed: channel=%s backend_thread=%s", channel.id, backend_thread.id)
+            return True
+        log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
+        return False
 
     async def _first_channel_message(self, channel) -> Optional[discord.Message]:
         try:
