@@ -434,6 +434,7 @@ class ElrondRadar(commands.Cog):
         await self._send_private(ctx, f"Deleted note #{number} for {label}: {deleted.get('text', '')[:120]}")
 
     @app_commands.command(name="usernote", description="Add a staff note for the user inferred from this ticket or intake thread.")
+    @app_commands.guilds(discord.Object(id=396055506072109067))
     @app_commands.guild_only()
     @app_commands.describe(note="Staff-only note for the user inferred from this ticket or intake thread")
     async def usernote_slash(self, interaction: discord.Interaction, note: str):
@@ -451,6 +452,7 @@ class ElrondRadar(commands.Cog):
         await interaction.response.send_message(f"Saved note for {saved['label']}.", ephemeral=True)
 
     @app_commands.command(name="usernote-add", description="Add a staff note for a Discord user or ElfHosted username.")
+    @app_commands.guilds(discord.Object(id=396055506072109067))
     @app_commands.guild_only()
     @app_commands.describe(target="Discord mention/ID or ElfHosted username", note="Staff-only note to attach to future intakes")
     async def usernote_add_slash(self, interaction: discord.Interaction, target: str, note: str):
@@ -468,6 +470,7 @@ class ElrondRadar(commands.Cog):
         await interaction.response.send_message(f"Saved note for {saved['label']}.", ephemeral=True)
 
     @app_commands.command(name="usernote-list", description="List staff notes for a Discord user or ElfHosted username.")
+    @app_commands.guilds(discord.Object(id=396055506072109067))
     @app_commands.guild_only()
     @app_commands.describe(target="Optional Discord mention/ID or ElfHosted username; omit in ticket/intake context")
     async def usernote_list_slash(self, interaction: discord.Interaction, target: Optional[str] = None):
@@ -485,6 +488,7 @@ class ElrondRadar(commands.Cog):
         await interaction.response.send_message(block or f"No notes for {label}.", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
     @app_commands.command(name="usernote-delete", description="Delete a staff note by number from /usernote-list.")
+    @app_commands.guilds(discord.Object(id=396055506072109067))
     @app_commands.guild_only()
     @app_commands.describe(number="Note number from /usernote-list", target="Optional Discord mention/ID or ElfHosted username; omit in ticket/intake context")
     async def usernote_delete_slash(self, interaction: discord.Interaction, number: int, target: Optional[str] = None):
