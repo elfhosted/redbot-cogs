@@ -253,6 +253,7 @@ class ElrondRadar(commands.Cog):
         visible_members = await self._ticket_visible_members(channel)
         unlinked_members = [member for member in visible_members if tenant_member is None or member.id != tenant_member.id]
         first_message = await self._first_useful_channel_message(channel, tenant_member.id if tenant_member is not None else None)
+        ticket_username = self._ticket_username(first_message)
         excerpt = self._message_excerpt(first_message, limit=900)
         source_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{ctx.guild.id}/{channel.id}"
         category_id = getattr(channel, "category_id", None)
@@ -262,7 +263,8 @@ class ElrondRadar(commands.Cog):
             "Elrond radar ticket inspection:",
             f"- channel: #{getattr(channel, 'name', channel.id)} ({channel.id})",
             f"- category: {category_id} ({'ok' if category_id == expected_category else 'expected ' + str(expected_category)})",
-            f"- tenant from overwrites: {tenant_member} ({tenant_member.id})" if tenant_member is not None else "- tenant from overwrites: not found",
+            f"- linked discord member: {tenant_member} ({tenant_member.id})" if tenant_member is not None else "- linked discord member: not found",
+            f"- modal account username: {ticket_username}" if ticket_username else "- modal account username: not found",
             "- unlinked visible members: " + (", ".join(f"{member} ({member.id})" for member in unlinked_members[:5]) if unlinked_members else "none"),
             f"- first useful message: {first_message.id} by {first_message.author}" if first_message is not None else "- first useful message: not found",
             f"- source: {source_url}",
@@ -554,7 +556,7 @@ class ElrondRadar(commands.Cog):
             "message_url": ticket_url,
             "message_author_id": str(tenant_member.id) if tenant_member is not None else (str(first_message.author.id) if first_message is not None else ""),
             "message_author_name": str(tenant_member) if tenant_member is not None else (str(first_message.author) if first_message is not None else ""),
-            "tenant_username": ticket_username,
+            "tenant_username": "" if tenant_member is not None else ticket_username,
             "message_content": message_excerpt,
             "backend_thread_id": str(backend_thread.id),
             "backend_thread_url": backend_thread.jump_url,
