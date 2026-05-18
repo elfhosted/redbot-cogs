@@ -606,10 +606,12 @@ class ElrondRadar(commands.Cog):
     async def _first_useful_channel_message(self, channel) -> Optional[discord.Message]:
         fallback = None
         try:
-            async for message in channel.history(limit=25, oldest_first=True):
-                if fallback is None:
+            async for message in channel.history(limit=50, oldest_first=True):
+                excerpt = self._message_excerpt(message)
+                if excerpt and fallback is None:
                     fallback = message
-                if self._message_excerpt(message):
+                author = getattr(message, "author", None)
+                if excerpt and not getattr(author, "bot", False):
                     return message
         except (discord.Forbidden, discord.HTTPException):
             return None
