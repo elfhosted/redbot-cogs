@@ -621,6 +621,7 @@ class ElrondRadar(commands.Cog):
         if message is None:
             return ""
 
+        priority_parts = []
         parts = []
         content = str(getattr(message, "content", "") or "").strip()
         if content:
@@ -637,7 +638,11 @@ class ElrondRadar(commands.Cog):
                 name = str(getattr(field, "name", "") or "").strip()
                 value = str(getattr(field, "value", "") or "").strip()
                 if name and value:
-                    parts.append(f"{name}: {value}")
+                    formatted = f"{name}: {value}"
+                    if self._is_ticket_request_field(name):
+                        priority_parts.append(formatted)
+                    else:
+                        parts.append(formatted)
                 elif value:
                     parts.append(value)
 
@@ -645,10 +650,20 @@ class ElrondRadar(commands.Cog):
         if attachments:
             parts.append("Attachments: " + ", ".join(getattr(item, "filename", "attachment") for item in attachments[:5]))
 
-        excerpt = " ".join(" ".join(part.split()) for part in parts if part).strip()
+        excerpt = " ".join(" ".join(part.split()) for part in [*priority_parts, *parts] if part).strip()
         if len(excerpt) > limit:
             return excerpt[: limit - 1].rstrip() + "…"
         return excerpt
+
+    def _is_ticket_request_field(self, name: str) -> bool:
+        normalized = " ".join(str(name or "").lower().replace("/", " ").replace("-", " ").split())
+        return (
+            "account username" in normalized
+            or "account issue" in normalized
+            or "issue error" in normalized
+            or "support request" in normalized
+            or "problem" in normalized
+        )
 
     async def _create_backend_thread(self, ticket_channel, first_message: Optional[discord.Message]):
         backend_channel = self.bot.get_channel(await self.config.backend_channel_id())
