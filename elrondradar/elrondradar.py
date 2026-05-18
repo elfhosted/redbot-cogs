@@ -501,12 +501,14 @@ class ElrondRadar(commands.Cog):
         await asyncio.sleep(5)
         first_message = await self._first_useful_channel_message(channel)
         message_excerpt = self._message_excerpt(first_message)
+        ticket_username = self._ticket_username(first_message)
         tenant_member = await self._ticket_tenant_member(channel)
         visible_members = await self._ticket_visible_members(channel)
         if tenant_member is None and visible_members:
             await self._announce_link_required(channel, visible_members[0])
-            log.info("Elrond radar ticket skipped pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
-            return False
+            if not ticket_username:
+                log.info("Elrond radar ticket skipped pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
+                return False
         backend_thread = await self._create_backend_thread(channel, first_message)
         if backend_thread is None:
             log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
@@ -531,6 +533,8 @@ class ElrondRadar(commands.Cog):
             intake_lines.append("Author: " + str(first_message.author))
         if tenant_member is not None:
             intake_lines.append("Tenant: " + str(tenant_member))
+        if ticket_username:
+            intake_lines.append("Account: " + ticket_username)
         if message_excerpt:
             quoted_excerpt = "\n".join("> " + line for line in message_excerpt.splitlines())
             intake_lines.append("Snippet:\n" + quoted_excerpt)
@@ -550,6 +554,7 @@ class ElrondRadar(commands.Cog):
             "message_url": ticket_url,
             "message_author_id": str(tenant_member.id) if tenant_member is not None else (str(first_message.author.id) if first_message is not None else ""),
             "message_author_name": str(tenant_member) if tenant_member is not None else (str(first_message.author) if first_message is not None else ""),
+            "tenant_username": ticket_username,
             "message_content": message_excerpt,
             "backend_thread_id": str(backend_thread.id),
             "backend_thread_url": backend_thread.jump_url,
@@ -664,6 +669,21 @@ class ElrondRadar(commands.Cog):
             or "support request" in normalized
             or "problem" in normalized
         )
+
+    def _ticket_username(self, message: Optional[discord.Message]) -> str:
+        if message is None:
+            return ""
+        for embed in getattr(message, "embeds", []) or []:
+            for field in getattr(embed, "fields", []) or []:
+                name = str(getattr(field, "name", "") or "").strip()
+                value = str(getattr(field, "value", "") or "").strip()
+                if self._is_ticket_username_field(name) and value:
+                    return value.split()[0].strip("*_~<>:;,. ")
+        return ""
+
+    def _is_ticket_username_field(self, name: str) -> bool:
+        normalized = " ".join(str(name or "").lower().replace("/", " ").replace("-", " ").split())
+        return "account username" in normalized or "elfhosted username" in normalized or normalized == "username"
 
     async def _create_backend_thread(self, ticket_channel, first_message: Optional[discord.Message]):
         backend_channel = self.bot.get_channel(await self.config.backend_channel_id())
