@@ -511,7 +511,8 @@ class ElrondRadar(commands.Cog):
             if not ticket_username:
                 log.info("Elrond radar ticket skipped pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
                 return False
-        backend_thread = await self._create_backend_thread(channel, first_message)
+        thread_username = self._thread_username(channel, ticket_username, tenant_member)
+        backend_thread = await self._create_backend_thread(channel, thread_username)
         if backend_thread is None:
             log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
             return False
@@ -703,7 +704,7 @@ class ElrondRadar(commands.Cog):
         normalized = " ".join(str(name or "").lower().replace("/", " ").replace("-", " ").split())
         return "account username" in normalized or "elfhosted username" in normalized or normalized == "username"
 
-    async def _create_backend_thread(self, ticket_channel, first_message: Optional[discord.Message]):
+    async def _create_backend_thread(self, ticket_channel, username: str):
         backend_channel = self.bot.get_channel(await self.config.backend_channel_id())
         if backend_channel is None and ticket_channel.guild is not None:
             try:
@@ -713,8 +714,19 @@ class ElrondRadar(commands.Cog):
         if backend_channel is None or not hasattr(backend_channel, "create_thread"):
             return None
 
-        raw_name = getattr(ticket_channel, "name", str(ticket_channel.id))
-        thread_name = ("intake-" + raw_name)[:90]
+        raw_name = username or getattr(ticket_channel, "name", str(ticket_channel.id))
+        thread_name = ("🟡 " + raw_name)[:90]
+        existing = await self._find_backend_thread(backend_channel, raw_name)
+        if existing is not None:
+            try:
+                await existing.edit(name=thread_name, archived=False, locked=False, reason="Elrond support ticket intake reopened")
+            except (discord.Forbidden, discord.HTTPException):
+                try:
+                    await existing.edit(name=thread_name, reason="Elrond support ticket intake reopened")
+                except (discord.Forbidden, discord.HTTPException):
+                    pass
+            return existing
+
         try:
             return await backend_channel.create_thread(
                 name=thread_name,
@@ -730,6 +742,40 @@ class ElrondRadar(commands.Cog):
                 )
             except (discord.Forbidden, discord.HTTPException):
                 return None
+
+    async def _find_backend_thread(self, backend_channel, username: str):
+        wanted = self._normal_thread_name(username)
+        for thread in getattr(backend_channel, "threads", []) or []:
+            if self._normal_thread_name(getattr(thread, "name", "")) == wanted:
+                return thread
+        if hasattr(backend_channel, "archived_threads"):
+            for private in (False, True):
+                try:
+                    async for thread in backend_channel.archived_threads(private=private, limit=100):
+                        if self._normal_thread_name(getattr(thread, "name", "")) == wanted:
+                            return thread
+                except (discord.Forbidden, discord.HTTPException, TypeError):
+                    continue
+        return None
+
+    def _thread_username(self, ticket_channel, ticket_username: str, tenant_member) -> str:
+        if ticket_username:
+            return ticket_username.lower()
+        channel_name = str(getattr(ticket_channel, "name", "") or "").strip().lower()
+        if "-" in channel_name:
+            prefix, suffix = channel_name.rsplit("-", 1)
+            if suffix.isdigit():
+                return prefix
+        if tenant_member is not None:
+            return str(getattr(tenant_member, "name", "") or getattr(tenant_member, "display_name", "") or "").lower()
+        return channel_name
+
+    def _normal_thread_name(self, value: str) -> str:
+        name = str(value or "").strip().lower()
+        for prefix in ("🟡", "🟢", "🔴", "🟠", "intake-"):
+            if name.startswith(prefix):
+                name = name[len(prefix):].strip()
+        return name
 
     def _build_payload(
         self,
