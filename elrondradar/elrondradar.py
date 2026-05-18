@@ -415,6 +415,28 @@ class ElrondRadar(commands.Cog):
         block = await self._format_user_notes_for_keys([key], heading=f"Notes for {label}")
         await ctx.send(block or f"No notes for {label}.", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
 
+    @commands.hybrid_command(name="usernote-delete")
+    @app_commands.describe(number="Note number from /usernote-list", target="Optional Discord mention/ID or ElfHosted username; omit in ticket/intake context")
+    async def usernote_delete(self, ctx: commands.Context, number: int, target: Optional[str] = None):
+        """Delete a staff note by number from /usernote-list."""
+        if await self._block_prefix_usernote_in_ticket(ctx):
+            return
+        if not await self._ctx_is_allowed_staff(ctx):
+            await ctx.send("Only authorised staff can delete user notes.", ephemeral=True)
+            return
+        if target:
+            key, label = await self._note_key_from_target(ctx.guild, target)
+        else:
+            key, label = await self._infer_note_target(ctx)
+        if not key:
+            await ctx.send("I couldn't infer a user here. Provide a Discord user, ID, or ElfHosted username.", ephemeral=True)
+            return
+        deleted = await self._delete_user_note_by_number(key, number)
+        if deleted is None:
+            await ctx.send(f"No note #{number} for {label}. Run /usernote-list first.", ephemeral=True)
+            return
+        await ctx.send(f"Deleted note #{number} for {label}: {deleted.get('text', '')[:120]}", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
     async def _is_allowed_staff(self, guild: discord.Guild, user_id: int, member: Optional[discord.Member]) -> bool:
         allowed_user_ids = set(await self.config.allowed_user_ids())
         if user_id in allowed_user_ids:
@@ -445,7 +467,7 @@ class ElrondRadar(commands.Cog):
         except (discord.Forbidden, discord.HTTPException, AttributeError):
             pass
         try:
-            await ctx.author.send("Use the slash command `/usernote`, `/usernote-add`, or `/usernote-list` in ticket channels so the response is only visible to you.")
+            await ctx.author.send("Use the slash command `/usernote`, `/usernote-add`, `/usernote-list`, or `/usernote-delete` in ticket channels so the response is only visible to you.")
         except (discord.Forbidden, discord.HTTPException, AttributeError):
             try:
                 await ctx.send("Use the slash command for user notes in ticket channels.", delete_after=10)
@@ -542,12 +564,28 @@ class ElrondRadar(commands.Cog):
             return ""
         entries = sorted(entries, key=lambda item: item.get("created_at", ""), reverse=True)[:8]
         lines = [f"🗒️ **{heading}**"]
-        for entry in entries:
+        for index, entry in enumerate(entries, start=1):
             created = str(entry.get("created_at", ""))[:10] or "unknown date"
             by = entry.get("created_by_name") or entry.get("created_by_id") or "unknown staff"
             text = entry.get("text") or ""
-            lines.append(f"- {created} · {by}: {text}")
+            lines.append(f"{index}. {created} · {by}: {text}")
         return "\n".join(lines)
+
+    async def _delete_user_note_by_number(self, key: str, number: int) -> Optional[dict]:
+        if number < 1:
+            return None
+        async with self.config.user_notes() as notes:
+            items = list(notes.get(key, []))
+            sorted_pairs = sorted(enumerate(items), key=lambda pair: pair[1].get("created_at", ""), reverse=True)
+            if number > len(sorted_pairs):
+                return None
+            original_index, deleted = sorted_pairs[number - 1]
+            del items[original_index]
+            if items:
+                notes[key] = items
+            else:
+                notes.pop(key, None)
+            return deleted
 
     async def _format_user_notes_for_intake(self, discord_id: str = "", username: str = "") -> str:
         keys = []
