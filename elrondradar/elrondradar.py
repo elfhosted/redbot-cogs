@@ -4,7 +4,7 @@ from typing import Optional, Tuple
 
 import aiohttp
 import discord
-from redbot.core import Config, commands
+from redbot.core import Config, app_commands, commands
 
 
 log = logging.getLogger("red.elrondradar")
@@ -112,6 +112,7 @@ class ElrondRadar(commands.Cog):
             backend_channel_id=DEFAULT_BACKEND_CHANNEL_ID,
             announce_ticket_link=True,
             tracked_ticket_channel_ids=[],
+            user_notes={},
         )
 
     def _reactions_intent_state(self) -> str:
@@ -357,6 +358,57 @@ class ElrondRadar(commands.Cog):
         else:
             await ctx.send(f"Elrond radar findtest accepted: HTTP {status} in <#{message.channel.id}>")
 
+    @commands.hybrid_command(name="usernote-add")
+    @app_commands.describe(target="Discord mention/ID or ElfHosted username", note="Staff-only note to attach to future intakes")
+    async def usernote_add(self, ctx: commands.Context, target: str, *, note: str):
+        """Add a staff note for a Discord user or ElfHosted username."""
+        if not await self._ctx_is_allowed_staff(ctx):
+            await ctx.send("Only authorised staff can manage user notes.", ephemeral=True)
+            return
+        if not " ".join(str(note or "").split()):
+            await ctx.send("Note text is required.", ephemeral=True)
+            return
+        key, label = await self._note_key_from_target(ctx.guild, target)
+        if not key:
+            await ctx.send("I couldn't resolve that target. Use a Discord mention/ID or ElfHosted username.", ephemeral=True)
+            return
+        saved = await self._add_user_note(key, label, note, ctx.author, ctx.channel)
+        await ctx.send(f"Saved note for {saved['label']}.", ephemeral=True)
+
+    @commands.hybrid_command(name="usernote-here")
+    @app_commands.describe(note="Staff-only note for the user inferred from this ticket or intake thread")
+    async def usernote_here(self, ctx: commands.Context, *, note: str):
+        """Add a staff note for the user inferred from the current ticket/intake context."""
+        if not await self._ctx_is_allowed_staff(ctx):
+            await ctx.send("Only authorised staff can manage user notes.", ephemeral=True)
+            return
+        if not " ".join(str(note or "").split()):
+            await ctx.send("Note text is required.", ephemeral=True)
+            return
+        key, label = await self._infer_note_target(ctx)
+        if not key:
+            await ctx.send("I couldn't infer a user here. Use /usernote-add with a Discord user, ID, or ElfHosted username.", ephemeral=True)
+            return
+        saved = await self._add_user_note(key, label, note, ctx.author, ctx.channel)
+        await ctx.send(f"Saved note for {saved['label']}.", ephemeral=True)
+
+    @commands.hybrid_command(name="usernote-list")
+    @app_commands.describe(target="Optional Discord mention/ID or ElfHosted username; omit in ticket/intake context")
+    async def usernote_list(self, ctx: commands.Context, target: Optional[str] = None):
+        """List staff notes for a Discord user or ElfHosted username."""
+        if not await self._ctx_is_allowed_staff(ctx):
+            await ctx.send("Only authorised staff can view user notes.", ephemeral=True)
+            return
+        if target:
+            key, label = await self._note_key_from_target(ctx.guild, target)
+        else:
+            key, label = await self._infer_note_target(ctx)
+        if not key:
+            await ctx.send("I couldn't infer a user here. Provide a Discord user, ID, or ElfHosted username.", ephemeral=True)
+            return
+        block = await self._format_user_notes_for_keys([key], heading=f"Notes for {label}")
+        await ctx.send(block or f"No notes for {label}.", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
     async def _is_allowed_staff(self, guild: discord.Guild, user_id: int, member: Optional[discord.Member]) -> bool:
         allowed_user_ids = set(await self.config.allowed_user_ids())
         if user_id in allowed_user_ids:
@@ -370,6 +422,118 @@ class ElrondRadar(commands.Cog):
 
         allowed_role_ids = set(await self.config.allowed_role_ids())
         return any(role.id in allowed_role_ids for role in getattr(member, "roles", []))
+
+    async def _ctx_is_allowed_staff(self, ctx: commands.Context) -> bool:
+        if ctx.guild is None or ctx.author is None:
+            return False
+        member = ctx.author if isinstance(ctx.author, discord.Member) else None
+        return await self._is_allowed_staff(ctx.guild, ctx.author.id, member)
+
+    async def _note_key_from_target(self, guild: Optional[discord.Guild], target: str) -> Tuple[str, str]:
+        value = str(target or "").strip()
+        if not value:
+            return "", ""
+        user_id = self._extract_discord_id(value)
+        if user_id:
+            member = None
+            if guild is not None:
+                member = guild.get_member(user_id)
+                if member is None:
+                    try:
+                        member = await guild.fetch_member(user_id)
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        member = None
+            label = str(member) if member is not None else f"Discord {user_id}"
+            return f"discord:{user_id}", label
+        username = self._normalize_username(value)
+        if not username:
+            return "", ""
+        return f"username:{username}", username
+
+    def _extract_discord_id(self, value: str) -> Optional[int]:
+        clean = str(value or "").strip()
+        if clean.startswith("<@") and clean.endswith(">"):
+            clean = clean.strip("<@!>")
+        if clean.isdigit():
+            return int(clean)
+        return None
+
+    def _normalize_username(self, value: str) -> str:
+        return str(value or "").strip().lower().replace("aa-", "", 1).strip("*_~<>:;,. ")
+
+    async def _infer_note_target(self, ctx: commands.Context) -> Tuple[str, str]:
+        channel = ctx.channel
+        if channel is None:
+            return "", ""
+
+        if getattr(channel, "category_id", None) == await self.config.ticket_category_id():
+            tenant_member = await self._ticket_tenant_member(channel)
+            if tenant_member is not None:
+                return f"discord:{tenant_member.id}", str(tenant_member)
+            first_message = await self._first_useful_channel_message(channel)
+            username = self._ticket_username(first_message)
+            if username:
+                normalized = self._normalize_username(username)
+                return f"username:{normalized}", normalized
+
+        backend_channel_id = await self.config.backend_channel_id()
+        parent_id = getattr(channel, "parent_id", None)
+        if parent_id == backend_channel_id or getattr(channel, "id", None) == backend_channel_id:
+            username = self._normal_thread_name(getattr(channel, "name", ""))
+            if username:
+                normalized = self._normalize_username(username)
+                return f"username:{normalized}", normalized
+
+        return "", ""
+
+    async def _add_user_note(self, key: str, label: str, note: str, author, channel) -> dict:
+        text = " ".join(str(note or "").split()).strip()
+        if len(text) > 600:
+            text = text[:599].rstrip() + "…"
+        entry = {
+            "text": text,
+            "label": label,
+            "created_by_id": str(getattr(author, "id", "")),
+            "created_by_name": getattr(author, "display_name", str(author)),
+            "created_at": discord.utils.utcnow().isoformat(),
+            "source_channel_id": str(getattr(channel, "id", "")),
+            "source_channel_name": getattr(channel, "name", ""),
+        }
+        async with self.config.user_notes() as notes:
+            items = list(notes.get(key, []))
+            items.append(entry)
+            notes[key] = items[-50:]
+        return entry
+
+    async def _format_user_notes_for_keys(self, keys, heading: str = "Staff notes") -> str:
+        all_notes = await self.config.user_notes()
+        seen = set()
+        entries = []
+        for key in keys:
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            entries.extend(all_notes.get(key, []))
+        if not entries:
+            return ""
+        entries = sorted(entries, key=lambda item: item.get("created_at", ""), reverse=True)[:8]
+        lines = [f"🗒️ **{heading}**"]
+        for entry in entries:
+            created = str(entry.get("created_at", ""))[:10] or "unknown date"
+            by = entry.get("created_by_name") or entry.get("created_by_id") or "unknown staff"
+            text = entry.get("text") or ""
+            lines.append(f"- {created} · {by}: {text}")
+        return "\n".join(lines)
+
+    async def _format_user_notes_for_intake(self, discord_id: str = "", username: str = "") -> str:
+        keys = []
+        clean_discord = str(discord_id or "").strip()
+        clean_username = self._normalize_username(username)
+        if clean_discord:
+            keys.append(f"discord:{clean_discord}")
+        if clean_username:
+            keys.append(f"username:{clean_username}")
+        return await self._format_user_notes_for_keys(keys)
 
     async def _fetch_message(self, payload: discord.RawReactionActionEvent) -> Optional[discord.Message]:
         channel = self.bot.get_channel(payload.channel_id)
@@ -528,6 +692,10 @@ class ElrondRadar(commands.Cog):
 
         source_message_id = first_message.id if first_message is not None else channel.id
         ticket_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{guild.id}/{channel.id}"
+        user_notes = await self._format_user_notes_for_intake(
+            str(tenant_member.id) if tenant_member is not None else (str(first_message.author.id) if first_message is not None else ""),
+            ticket_username or thread_username,
+        )
         intake_lines = [
             "Ticket intake for " + channel.mention,
             "Source: " + ticket_url,
@@ -559,6 +727,7 @@ class ElrondRadar(commands.Cog):
             "message_author_name": str(tenant_member) if tenant_member is not None else (str(first_message.author) if first_message is not None else ""),
             "tenant_username": "" if tenant_member is not None else ticket_username,
             "message_content": message_excerpt,
+            "user_notes": user_notes,
             "backend_thread_id": str(backend_thread.id),
             "backend_thread_url": backend_thread.jump_url,
             "staff_discord_id": str(self.bot.user.id if self.bot.user else 0),
