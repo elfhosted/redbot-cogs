@@ -440,6 +440,7 @@ class ElrondRadar(commands.Cog):
         await asyncio.sleep(5)
         first_message = await self._first_useful_channel_message(channel)
         message_excerpt = self._message_excerpt(first_message)
+        tenant_member = await self._ticket_tenant_member(channel)
         backend_thread = await self._create_backend_thread(channel, first_message)
         if backend_thread is None:
             log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
@@ -455,13 +456,15 @@ class ElrondRadar(commands.Cog):
                 log.warning("Elrond radar could not announce backend thread in ticket %s: %s", channel.id, exc)
 
         source_message_id = first_message.id if first_message is not None else channel.id
-        ticket_url = first_message.jump_url if first_message is not None else getattr(channel, "jump_url", "")
+        ticket_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{guild.id}/{channel.id}"
         intake_lines = [
             "Ticket intake for " + channel.mention,
             "Source: " + ticket_url,
         ]
         if first_message is not None:
             intake_lines.append("Author: " + str(first_message.author))
+        if tenant_member is not None:
+            intake_lines.append("Tenant: " + str(tenant_member))
         if message_excerpt:
             quoted_excerpt = "\n".join("> " + line for line in message_excerpt.splitlines())
             intake_lines.append("Snippet:\n" + quoted_excerpt)
@@ -479,8 +482,8 @@ class ElrondRadar(commands.Cog):
             "channel_name": getattr(channel, "name", str(channel.id)),
             "message_id": str(source_message_id),
             "message_url": ticket_url,
-            "message_author_id": str(first_message.author.id) if first_message is not None else "",
-            "message_author_name": str(first_message.author) if first_message is not None else "",
+            "message_author_id": str(tenant_member.id) if tenant_member is not None else (str(first_message.author.id) if first_message is not None else ""),
+            "message_author_name": str(tenant_member) if tenant_member is not None else (str(first_message.author) if first_message is not None else ""),
             "message_content": message_excerpt,
             "backend_thread_id": str(backend_thread.id),
             "backend_thread_url": backend_thread.jump_url,
@@ -494,6 +497,25 @@ class ElrondRadar(commands.Cog):
             return True
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
         return False
+
+    async def _ticket_tenant_member(self, channel):
+        allowed_users = set(await self.config.allowed_user_ids())
+        allowed_roles = set(await self.config.allowed_role_ids())
+        overwrites = getattr(channel, "overwrites", {}) or {}
+        for target, overwrite in overwrites.items():
+            if not isinstance(target, discord.Member):
+                continue
+            if target.bot or target.id in allowed_users:
+                continue
+            if any(role.id in allowed_roles for role in getattr(target, "roles", [])):
+                continue
+            view_channel = getattr(overwrite, "view_channel", None)
+            read_messages = getattr(overwrite, "read_messages", None)
+            if view_channel is False or read_messages is False:
+                continue
+            if view_channel is True or read_messages is True:
+                return target
+        return None
 
     async def _first_useful_channel_message(self, channel) -> Optional[discord.Message]:
         fallback = None
