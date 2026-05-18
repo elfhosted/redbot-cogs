@@ -16,6 +16,7 @@ DEFAULT_ALLOWED_ROLE_IDS = [
     1247172016490938472,
 ]
 DEFAULT_TENANT_ROLE_IDS = [1391914584440311840]
+DEFAULT_LINK_INSTRUCTIONS_CHANNEL_ID = 1392004498611900476
 SUPPORTED_EMOJIS = {"🚨", "🐧", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
 DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
@@ -106,6 +107,7 @@ class ElrondRadar(commands.Cog):
             allowed_user_ids=DEFAULT_ALLOWED_USER_IDS,
             allowed_role_ids=DEFAULT_ALLOWED_ROLE_IDS,
             tenant_role_ids=DEFAULT_TENANT_ROLE_IDS,
+            link_instructions_channel_id=DEFAULT_LINK_INSTRUCTIONS_CHANNEL_ID,
             ticket_category_id=DEFAULT_TICKET_CATEGORY_ID,
             backend_channel_id=DEFAULT_BACKEND_CHANNEL_ID,
             announce_ticket_link=True,
@@ -166,7 +168,8 @@ class ElrondRadar(commands.Cog):
             f"- announce ticket link: {cfg.get('announce_ticket_link')}\n"
             f"- allowed users: {len(cfg.get('allowed_user_ids') or [])}\n"
             f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}\n"
-            f"- tenant roles: {len(cfg.get('tenant_role_ids') or [])}"
+            f"- tenant roles: {len(cfg.get('tenant_role_ids') or [])}\n"
+            f"- link instructions channel: {cfg.get('link_instructions_channel_id')}"
         )
 
     @elrondradar.command(name="setticketcategory")
@@ -186,6 +189,12 @@ class ElrondRadar(commands.Cog):
         """Set the Discord role used to identify tenant members in ticket channels."""
         await self.config.tenant_role_ids.set([role_id])
         await ctx.send("Elrond radar tenant role updated.")
+
+    @elrondradar.command(name="setlinkchannel")
+    async def setlinkchannel(self, ctx, channel_id: int):
+        """Set the channel users should visit to link their Discord account."""
+        await self.config.link_instructions_channel_id.set(channel_id)
+        await ctx.send("Elrond radar link instructions channel updated.")
 
     @elrondradar.command(name="cleartickets")
     async def cleartickets(self, ctx):
@@ -241,6 +250,8 @@ class ElrondRadar(commands.Cog):
             return
 
         tenant_member = await self._ticket_tenant_member(channel)
+        visible_members = await self._ticket_visible_members(channel)
+        unlinked_members = [member for member in visible_members if tenant_member is None or member.id != tenant_member.id]
         first_message = await self._first_useful_channel_message(channel)
         excerpt = self._message_excerpt(first_message, limit=900)
         source_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{ctx.guild.id}/{channel.id}"
@@ -252,6 +263,7 @@ class ElrondRadar(commands.Cog):
             f"- channel: #{getattr(channel, 'name', channel.id)} ({channel.id})",
             f"- category: {category_id} ({'ok' if category_id == expected_category else 'expected ' + str(expected_category)})",
             f"- tenant from overwrites: {tenant_member} ({tenant_member.id})" if tenant_member is not None else "- tenant from overwrites: not found",
+            "- unlinked visible members: " + (", ".join(f"{member} ({member.id})" for member in unlinked_members[:5]) if unlinked_members else "none"),
             f"- first useful message: {first_message.id} by {first_message.author}" if first_message is not None else "- first useful message: not found",
             f"- source: {source_url}",
             "- excerpt: " + (excerpt or "not provided"),
@@ -490,6 +502,11 @@ class ElrondRadar(commands.Cog):
         first_message = await self._first_useful_channel_message(channel)
         message_excerpt = self._message_excerpt(first_message)
         tenant_member = await self._ticket_tenant_member(channel)
+        visible_members = await self._ticket_visible_members(channel)
+        if tenant_member is None and visible_members:
+            await self._announce_link_required(channel, visible_members[0])
+            log.info("Elrond radar ticket skipped pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
+            return False
         backend_thread = await self._create_backend_thread(channel, first_message)
         if backend_thread is None:
             log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
@@ -547,12 +564,30 @@ class ElrondRadar(commands.Cog):
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
         return False
 
+    async def _announce_link_required(self, channel, member):
+        link_channel_id = await self.config.link_instructions_channel_id()
+        link_target = f"<#{link_channel_id}>" if link_channel_id else "the Discord linking instructions channel"
+        try:
+            await channel.send(
+                f"{member.mention}, I can't prepare your ElfHosted account intake yet because this Discord account is not linked. "
+                f"Please follow the instructions in {link_target}, then staff can retry intake.",
+                allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
+            )
+        except (discord.Forbidden, discord.HTTPException) as exc:
+            log.warning("Elrond radar could not announce Discord linking instructions in ticket %s: %s", channel.id, exc)
+
     async def _ticket_tenant_member(self, channel):
+        tenant_roles = set(await self.config.tenant_role_ids())
+        for member in await self._ticket_visible_members(channel):
+            if tenant_roles and any(role.id in tenant_roles for role in getattr(member, "roles", [])):
+                return member
+        return None
+
+    async def _ticket_visible_members(self, channel):
         allowed_users = set(await self.config.allowed_user_ids())
         allowed_roles = set(await self.config.allowed_role_ids())
-        tenant_roles = set(await self.config.tenant_role_ids())
         overwrites = getattr(channel, "overwrites", {}) or {}
-        fallback = None
+        members = []
         for target, overwrite in overwrites.items():
             if not isinstance(target, discord.Member):
                 continue
@@ -565,11 +600,8 @@ class ElrondRadar(commands.Cog):
             if view_channel is False or read_messages is False:
                 continue
             if view_channel is True or read_messages is True:
-                if tenant_roles and any(role.id in tenant_roles for role in getattr(target, "roles", [])):
-                    return target
-                if fallback is None:
-                    fallback = target
-        return fallback if not tenant_roles else None
+                members.append(target)
+        return members
 
     async def _first_useful_channel_message(self, channel) -> Optional[discord.Message]:
         fallback = None
