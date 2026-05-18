@@ -17,7 +17,7 @@ DEFAULT_ALLOWED_ROLE_IDS = [
 ]
 SUPPORTED_EMOJIS = {"🚨", "🐧", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
-DEFAULT_BACKEND_CHANNEL_ID = 1505438314340159489
+DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
 
 
 class DiagnosisRequestModal(discord.ui.Modal):
@@ -438,7 +438,8 @@ class ElrondRadar(commands.Cog):
             return False
 
         await asyncio.sleep(5)
-        first_message = await self._first_channel_message(channel)
+        first_message = await self._first_useful_channel_message(channel)
+        message_excerpt = self._message_excerpt(first_message)
         backend_thread = await self._create_backend_thread(channel, first_message)
         if backend_thread is None:
             log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
@@ -455,10 +456,18 @@ class ElrondRadar(commands.Cog):
 
         source_message_id = first_message.id if first_message is not None else channel.id
         ticket_url = first_message.jump_url if first_message is not None else getattr(channel, "jump_url", "")
+        intake_lines = [
+            "Ticket intake for " + channel.mention,
+            "Source: " + ticket_url,
+        ]
+        if first_message is not None:
+            intake_lines.append("Author: " + str(first_message.author))
+        if message_excerpt:
+            quoted_excerpt = "\n".join("> " + line for line in message_excerpt.splitlines())
+            intake_lines.append("Snippet:\n" + quoted_excerpt)
+        intake_lines.append("Use the button only when staff want Elrond to run diagnosis.")
         await backend_thread.send(
-            "Ticket intake for " + channel.mention + "\n"
-            "Source: " + ticket_url + "\n\n"
-            "Use the button only when staff want Elrond to run diagnosis.",
+            "\n\n".join(intake_lines),
             view=DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id),
             allowed_mentions=discord.AllowedMentions.none(),
         )
@@ -472,7 +481,7 @@ class ElrondRadar(commands.Cog):
             "message_url": ticket_url,
             "message_author_id": str(first_message.author.id) if first_message is not None else "",
             "message_author_name": str(first_message.author) if first_message is not None else "",
-            "message_content": first_message.content if first_message is not None else "",
+            "message_content": message_excerpt,
             "backend_thread_id": str(backend_thread.id),
             "backend_thread_url": backend_thread.jump_url,
             "staff_discord_id": str(self.bot.user.id if self.bot.user else 0),
@@ -486,13 +495,50 @@ class ElrondRadar(commands.Cog):
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
         return False
 
-    async def _first_channel_message(self, channel) -> Optional[discord.Message]:
+    async def _first_useful_channel_message(self, channel) -> Optional[discord.Message]:
+        fallback = None
         try:
-            async for message in channel.history(limit=1, oldest_first=True):
-                return message
+            async for message in channel.history(limit=25, oldest_first=True):
+                if fallback is None:
+                    fallback = message
+                if self._message_excerpt(message):
+                    return message
         except (discord.Forbidden, discord.HTTPException):
             return None
-        return None
+        return fallback
+
+    def _message_excerpt(self, message: Optional[discord.Message], limit: int = 500) -> str:
+        if message is None:
+            return ""
+
+        parts = []
+        content = str(getattr(message, "content", "") or "").strip()
+        if content:
+            parts.append(content)
+
+        for embed in getattr(message, "embeds", []) or []:
+            title = str(getattr(embed, "title", "") or "").strip()
+            description = str(getattr(embed, "description", "") or "").strip()
+            if title:
+                parts.append(title)
+            if description:
+                parts.append(description)
+            for field in getattr(embed, "fields", []) or []:
+                name = str(getattr(field, "name", "") or "").strip()
+                value = str(getattr(field, "value", "") or "").strip()
+                if name and value:
+                    parts.append(f"{name}: {value}")
+                elif value:
+                    parts.append(value)
+
+        attachments = getattr(message, "attachments", []) or []
+        if attachments:
+            parts.append("Attachments: " + ", ".join(getattr(item, "filename", "attachment") for item in attachments[:5]))
+
+        excerpt = " ".join(" ".join(part.split()) for part in parts if part).strip()
+        if len(excerpt) > limit:
+            return excerpt[: limit - 1].rstrip() + "…"
+        return excerpt
 
     async def _create_backend_thread(self, ticket_channel, first_message: Optional[discord.Message]):
         backend_channel = self.bot.get_channel(await self.config.backend_channel_id())
