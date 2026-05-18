@@ -15,6 +15,7 @@ DEFAULT_ALLOWED_ROLE_IDS = [
     1252252269790105721,
     1247172016490938472,
 ]
+DEFAULT_TENANT_ROLE_IDS = [1391914584440311840]
 SUPPORTED_EMOJIS = {"🚨", "🐧", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
 DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
@@ -104,6 +105,7 @@ class ElrondRadar(commands.Cog):
             guild_id=396055506072109067,
             allowed_user_ids=DEFAULT_ALLOWED_USER_IDS,
             allowed_role_ids=DEFAULT_ALLOWED_ROLE_IDS,
+            tenant_role_ids=DEFAULT_TENANT_ROLE_IDS,
             ticket_category_id=DEFAULT_TICKET_CATEGORY_ID,
             backend_channel_id=DEFAULT_BACKEND_CHANNEL_ID,
             announce_ticket_link=True,
@@ -163,7 +165,8 @@ class ElrondRadar(commands.Cog):
             f"- backend channel: {cfg.get('backend_channel_id')}\n"
             f"- announce ticket link: {cfg.get('announce_ticket_link')}\n"
             f"- allowed users: {len(cfg.get('allowed_user_ids') or [])}\n"
-            f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}"
+            f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}\n"
+            f"- tenant roles: {len(cfg.get('tenant_role_ids') or [])}"
         )
 
     @elrondradar.command(name="setticketcategory")
@@ -177,6 +180,12 @@ class ElrondRadar(commands.Cog):
         """Set the staff backend channel where intake threads are created."""
         await self.config.backend_channel_id.set(channel_id)
         await ctx.send("Elrond radar backend channel updated.")
+
+    @elrondradar.command(name="settenantrole")
+    async def settenantrole(self, ctx, role_id: int):
+        """Set the Discord role used to identify tenant members in ticket channels."""
+        await self.config.tenant_role_ids.set([role_id])
+        await ctx.send("Elrond radar tenant role updated.")
 
     @elrondradar.command(name="cleartickets")
     async def cleartickets(self, ctx):
@@ -541,7 +550,9 @@ class ElrondRadar(commands.Cog):
     async def _ticket_tenant_member(self, channel):
         allowed_users = set(await self.config.allowed_user_ids())
         allowed_roles = set(await self.config.allowed_role_ids())
+        tenant_roles = set(await self.config.tenant_role_ids())
         overwrites = getattr(channel, "overwrites", {}) or {}
+        fallback = None
         for target, overwrite in overwrites.items():
             if not isinstance(target, discord.Member):
                 continue
@@ -554,8 +565,11 @@ class ElrondRadar(commands.Cog):
             if view_channel is False or read_messages is False:
                 continue
             if view_channel is True or read_messages is True:
-                return target
-        return None
+                if tenant_roles and any(role.id in tenant_roles for role in getattr(target, "roles", [])):
+                    return target
+                if fallback is None:
+                    fallback = target
+        return fallback if not tenant_roles else None
 
     async def _first_useful_channel_message(self, channel) -> Optional[discord.Message]:
         fallback = None
