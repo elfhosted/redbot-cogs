@@ -209,6 +209,46 @@ class ElrondRadar(commands.Cog):
                     processed += 1
         await ctx.send(f"Elrond radar ticket scan complete: processed {processed}/{attempted} visible channel(s) in category {category_id}. force={force}")
 
+    @elrondradar.command(name="inspectticket")
+    async def inspectticket(self, ctx, channel_id: int):
+        """Show what Redbot can mechanically extract from a support ticket channel."""
+        if ctx.guild is None:
+            await ctx.send("Run this in the configured guild.")
+            return
+        if ctx.guild.id != await self.config.guild_id():
+            await ctx.send("This server is not the configured Elrond radar guild.")
+            return
+
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await ctx.guild.fetch_channel(channel_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
+                await ctx.send(f"Could not fetch ticket channel {channel_id}: {exc}")
+                return
+
+        if not hasattr(channel, "history"):
+            await ctx.send(f"Channel {channel_id} is not a readable text channel.")
+            return
+
+        tenant_member = await self._ticket_tenant_member(channel)
+        first_message = await self._first_useful_channel_message(channel)
+        excerpt = self._message_excerpt(first_message, limit=900)
+        source_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{ctx.guild.id}/{channel.id}"
+        category_id = getattr(channel, "category_id", None)
+        expected_category = await self.config.ticket_category_id()
+
+        lines = [
+            "Elrond radar ticket inspection:",
+            f"- channel: #{getattr(channel, 'name', channel.id)} ({channel.id})",
+            f"- category: {category_id} ({'ok' if category_id == expected_category else 'expected ' + str(expected_category)})",
+            f"- tenant from overwrites: {tenant_member} ({tenant_member.id})" if tenant_member is not None else "- tenant from overwrites: not found",
+            f"- first useful message: {first_message.id} by {first_message.author}" if first_message is not None else "- first useful message: not found",
+            f"- source: {source_url}",
+            "- excerpt: " + (excerpt or "not provided"),
+        ]
+        await ctx.send("\n".join(lines)[:1900], allowed_mentions=discord.AllowedMentions.none())
+
     @elrondradar.command(name="test")
     async def test(self, ctx, channel_id: int, message_id: int, emoji: str = "👀"):
         """Send a synthetic radar event for a specific Discord message."""
