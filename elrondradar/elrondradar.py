@@ -252,7 +252,7 @@ class ElrondRadar(commands.Cog):
         tenant_member = await self._ticket_tenant_member(channel)
         visible_members = await self._ticket_visible_members(channel)
         unlinked_members = [member for member in visible_members if tenant_member is None or member.id != tenant_member.id]
-        first_message = await self._first_useful_channel_message(channel)
+        first_message = await self._first_useful_channel_message(channel, tenant_member.id if tenant_member is not None else None)
         excerpt = self._message_excerpt(first_message, limit=900)
         source_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{ctx.guild.id}/{channel.id}"
         category_id = getattr(channel, "category_id", None)
@@ -499,10 +499,10 @@ class ElrondRadar(commands.Cog):
             return False
 
         await asyncio.sleep(5)
-        first_message = await self._first_useful_channel_message(channel)
+        tenant_member = await self._ticket_tenant_member(channel)
+        first_message = await self._first_useful_channel_message(channel, tenant_member.id if tenant_member is not None else None)
         message_excerpt = self._message_excerpt(first_message)
         ticket_username = self._ticket_username(first_message)
-        tenant_member = await self._ticket_tenant_member(channel)
         visible_members = await self._ticket_visible_members(channel)
         if tenant_member is None and visible_members:
             await self._announce_link_required(channel, visible_members[0])
@@ -608,19 +608,24 @@ class ElrondRadar(commands.Cog):
                 members.append(target)
         return members
 
-    async def _first_useful_channel_message(self, channel) -> Optional[discord.Message]:
+    async def _first_useful_channel_message(self, channel, preferred_author_id: Optional[int] = None) -> Optional[discord.Message]:
         fallback = None
+        preferred_fallback = None
         try:
             async for message in channel.history(limit=50, oldest_first=True):
                 excerpt = self._message_excerpt(message)
                 if excerpt and fallback is None:
                     fallback = message
-                author = getattr(message, "author", None)
-                if excerpt and not getattr(author, "bot", False):
+                if self._has_ticket_request_fields(message):
                     return message
+                author = getattr(message, "author", None)
+                if excerpt and preferred_author_id is not None and getattr(author, "id", None) == preferred_author_id:
+                    return message
+                if excerpt and preferred_fallback is None and not getattr(author, "bot", False):
+                    preferred_fallback = message
         except (discord.Forbidden, discord.HTTPException):
             return None
-        return fallback
+        return preferred_fallback or fallback
 
     def _message_excerpt(self, message: Optional[discord.Message], limit: int = 500) -> str:
         if message is None:
@@ -669,6 +674,17 @@ class ElrondRadar(commands.Cog):
             or "support request" in normalized
             or "problem" in normalized
         )
+
+    def _has_ticket_request_fields(self, message: Optional[discord.Message]) -> bool:
+        if message is None:
+            return False
+        for embed in getattr(message, "embeds", []) or []:
+            for field in getattr(embed, "fields", []) or []:
+                name = str(getattr(field, "name", "") or "").strip()
+                value = str(getattr(field, "value", "") or "").strip()
+                if value and self._is_ticket_request_field(name):
+                    return True
+        return False
 
     def _ticket_username(self, message: Optional[discord.Message]) -> str:
         if message is None:
