@@ -360,41 +360,41 @@ class ElrondRadar(commands.Cog):
 
     @commands.hybrid_command(name="usernote-add")
     @app_commands.describe(target="Discord mention/ID or ElfHosted username", note="Staff-only note to attach to future intakes")
-    async def usernote_add(self, ctx: commands.Context, target: str, *, note: str):
+    async def usernote_add(self, ctx: commands.Context, target: str, note: str):
         """Add a staff note for a Discord user or ElfHosted username."""
         if await self._block_prefix_usernote_in_ticket(ctx):
             return
         if not await self._ctx_is_allowed_staff(ctx):
-            await ctx.send("Only authorised staff can manage user notes.", ephemeral=True)
+            await self._send_private(ctx, "Only authorised staff can manage user notes.")
             return
         if not " ".join(str(note or "").split()):
-            await ctx.send("Note text is required.", ephemeral=True)
+            await self._send_private(ctx, "Note text is required.")
             return
         key, label = await self._note_key_from_target(ctx.guild, target)
         if not key:
-            await ctx.send("I couldn't resolve that target. Use a Discord mention/ID or ElfHosted username.", ephemeral=True)
+            await self._send_private(ctx, "I couldn't resolve that target. Use a Discord mention/ID or ElfHosted username.")
             return
         saved = await self._add_user_note(key, label, note, ctx.author, ctx.channel)
-        await ctx.send(f"Saved note for {saved['label']}.", ephemeral=True)
+        await self._send_private(ctx, f"Saved note for {saved['label']}.")
 
     @commands.hybrid_command(name="usernote")
     @app_commands.describe(note="Staff-only note for the user inferred from this ticket or intake thread")
-    async def usernote(self, ctx: commands.Context, *, note: str):
+    async def usernote(self, ctx: commands.Context, note: str):
         """Add a staff note for the user inferred from the current ticket/intake context."""
         if await self._block_prefix_usernote_in_ticket(ctx):
             return
         if not await self._ctx_is_allowed_staff(ctx):
-            await ctx.send("Only authorised staff can manage user notes.", ephemeral=True)
+            await self._send_private(ctx, "Only authorised staff can manage user notes.")
             return
         if not " ".join(str(note or "").split()):
-            await ctx.send("Note text is required.", ephemeral=True)
+            await self._send_private(ctx, "Note text is required.")
             return
         key, label = await self._infer_note_target(ctx)
         if not key:
-            await ctx.send("I couldn't infer a user here. Use /usernote-add with a Discord user, ID, or ElfHosted username.", ephemeral=True)
+            await self._send_private(ctx, "I couldn't infer a user here. Use /usernote-add with a Discord user, ID, or ElfHosted username.")
             return
         saved = await self._add_user_note(key, label, note, ctx.author, ctx.channel)
-        await ctx.send(f"Saved note for {saved['label']}.", ephemeral=True)
+        await self._send_private(ctx, f"Saved note for {saved['label']}.")
 
     @commands.hybrid_command(name="usernote-list")
     @app_commands.describe(target="Optional Discord mention/ID or ElfHosted username; omit in ticket/intake context")
@@ -403,17 +403,17 @@ class ElrondRadar(commands.Cog):
         if await self._block_prefix_usernote_in_ticket(ctx):
             return
         if not await self._ctx_is_allowed_staff(ctx):
-            await ctx.send("Only authorised staff can view user notes.", ephemeral=True)
+            await self._send_private(ctx, "Only authorised staff can view user notes.")
             return
         if target:
             key, label = await self._note_key_from_target(ctx.guild, target)
         else:
             key, label = await self._infer_note_target(ctx)
         if not key:
-            await ctx.send("I couldn't infer a user here. Provide a Discord user, ID, or ElfHosted username.", ephemeral=True)
+            await self._send_private(ctx, "I couldn't infer a user here. Provide a Discord user, ID, or ElfHosted username.")
             return
         block = await self._format_user_notes_for_keys([key], heading=f"Notes for {label}")
-        await ctx.send(block or f"No notes for {label}.", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        await self._send_private(ctx, block or f"No notes for {label}.")
 
     @commands.hybrid_command(name="usernote-delete")
     @app_commands.describe(number="Note number from /usernote-list", target="Optional Discord mention/ID or ElfHosted username; omit in ticket/intake context")
@@ -422,20 +422,20 @@ class ElrondRadar(commands.Cog):
         if await self._block_prefix_usernote_in_ticket(ctx):
             return
         if not await self._ctx_is_allowed_staff(ctx):
-            await ctx.send("Only authorised staff can delete user notes.", ephemeral=True)
+            await self._send_private(ctx, "Only authorised staff can delete user notes.")
             return
         if target:
             key, label = await self._note_key_from_target(ctx.guild, target)
         else:
             key, label = await self._infer_note_target(ctx)
         if not key:
-            await ctx.send("I couldn't infer a user here. Provide a Discord user, ID, or ElfHosted username.", ephemeral=True)
+            await self._send_private(ctx, "I couldn't infer a user here. Provide a Discord user, ID, or ElfHosted username.")
             return
         deleted = await self._delete_user_note_by_number(key, number)
         if deleted is None:
-            await ctx.send(f"No note #{number} for {label}. Run /usernote-list first.", ephemeral=True)
+            await self._send_private(ctx, f"No note #{number} for {label}. Run /usernote-list first.")
             return
-        await ctx.send(f"Deleted note #{number} for {label}: {deleted.get('text', '')[:120]}", ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        await self._send_private(ctx, f"Deleted note #{number} for {label}: {deleted.get('text', '')[:120]}")
 
     async def _is_allowed_staff(self, guild: discord.Guild, user_id: int, member: Optional[discord.Member]) -> bool:
         allowed_user_ids = set(await self.config.allowed_user_ids())
@@ -456,6 +456,12 @@ class ElrondRadar(commands.Cog):
             return False
         member = ctx.author if isinstance(ctx.author, discord.Member) else None
         return await self._is_allowed_staff(ctx.guild, ctx.author.id, member)
+
+    async def _send_private(self, ctx: commands.Context, message: str):
+        kwargs = {"allowed_mentions": discord.AllowedMentions.none()}
+        if getattr(ctx, "interaction", None) is not None:
+            kwargs["ephemeral"] = True
+        await ctx.send(message, **kwargs)
 
     async def _block_prefix_usernote_in_ticket(self, ctx: commands.Context) -> bool:
         if getattr(ctx, "interaction", None) is not None:
