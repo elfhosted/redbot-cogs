@@ -17,7 +17,7 @@ DEFAULT_ALLOWED_ROLE_IDS = [
 ]
 DEFAULT_TENANT_ROLE_IDS = [1391914584440311840]
 DEFAULT_LINK_INSTRUCTIONS_CHANNEL_ID = 1392004498611900476
-SUPPORTED_EMOJIS = {"🚨", "🐧", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
+SUPPORTED_EMOJIS = {"🚨", "🐧", "🏎️", "🏎", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
 DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
 
@@ -122,6 +122,13 @@ class ElrondRadar(commands.Cog):
         if hasattr(intents, "reactions"):
             return str(getattr(intents, "reactions"))
         return str(getattr(intents, "guild_reactions", "unknown"))
+
+    def _normalized_emoji(self, emoji) -> str:
+        return str(emoji or "").strip().replace("\ufe0f", "")
+
+    def _is_supported_emoji(self, emoji) -> bool:
+        text = str(emoji or "").strip()
+        return text in SUPPORTED_EMOJIS or self._normalized_emoji(text) in SUPPORTED_EMOJIS
 
     @commands.group(name="elrondradar")
     @commands.admin_or_permissions(manage_guild=True)
@@ -282,7 +289,7 @@ class ElrondRadar(commands.Cog):
         if ctx.guild.id != await self.config.guild_id():
             await ctx.send("This server is not the configured Elrond radar guild.")
             return
-        if emoji not in SUPPORTED_EMOJIS:
+        if not self._is_supported_emoji(emoji):
             await ctx.send(f"Unsupported radar emoji: {emoji}")
             return
 
@@ -330,7 +337,7 @@ class ElrondRadar(commands.Cog):
         if ctx.guild.id != await self.config.guild_id():
             await ctx.send("This server is not the configured Elrond radar guild.")
             return
-        if emoji not in SUPPORTED_EMOJIS:
+        if not self._is_supported_emoji(emoji):
             await ctx.send(f"Unsupported radar emoji: {emoji}")
             return
 
@@ -764,7 +771,14 @@ class ElrondRadar(commands.Cog):
             return
 
         emoji = str(payload.emoji)
-        if emoji not in SUPPORTED_EMOJIS:
+        if not self._is_supported_emoji(emoji):
+            log.debug(
+                "Elrond radar ignored unsupported reaction: emoji=%s channel=%s message=%s user=%s",
+                emoji,
+                payload.channel_id,
+                payload.message_id,
+                payload.user_id,
+            )
             return
 
         guild = self.bot.get_guild(payload.guild_id)
