@@ -112,6 +112,7 @@ class ElrondRadar(commands.Cog):
             backend_channel_id=DEFAULT_BACKEND_CHANNEL_ID,
             announce_ticket_link=True,
             tracked_ticket_channel_ids=[],
+            tracked_ticket_identity_resolved={},
             user_notes={},
         )
 
@@ -208,6 +209,7 @@ class ElrondRadar(commands.Cog):
     async def cleartickets(self, ctx):
         """Clear tracked ticket IDs so category scan/create can retry intake."""
         await self.config.tracked_ticket_channel_ids.set([])
+        await self.config.tracked_ticket_identity_resolved.set({})
         await ctx.send("Elrond radar tracked ticket cache cleared.")
 
     @elrondradar.command(name="scantickets")
@@ -762,6 +764,31 @@ class ElrondRadar(commands.Cog):
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
         await self._handle_ticket_channel_create(channel)
 
+    @commands.Cog.listener()
+    async def on_member_update(self, before, after):
+        tenant_roles = set(await self.config.tenant_role_ids())
+        if not tenant_roles:
+            return
+        before_roles = {role.id for role in getattr(before, "roles", [])}
+        after_roles = {role.id for role in getattr(after, "roles", [])}
+        if not tenant_roles.intersection(after_roles - before_roles):
+            return
+
+        guild = getattr(after, "guild", None)
+        if guild is None or guild.id != await self.config.guild_id():
+            return
+
+        category_id = await self.config.ticket_category_id()
+        channels = [
+            channel for channel in getattr(guild, "text_channels", [])
+            if getattr(channel, "category_id", None) == category_id
+        ]
+        for channel in channels:
+            visible_members = await self._ticket_visible_members(channel)
+            if any(member.id == after.id for member in visible_members):
+                if await self._handle_ticket_channel_create(channel):
+                    log.info("Elrond radar refreshed ticket intake after Discord link: channel=%s user=%s", channel.id, after.id)
+
     async def _handle_reaction(self, payload: discord.RawReactionActionEvent, action: str):
         if not await self.config.enabled():
             return
@@ -822,7 +849,9 @@ class ElrondRadar(commands.Cog):
             return False
 
         tracked = set(await self.config.tracked_ticket_channel_ids())
-        if channel.id in tracked and not force:
+        tracked_identity = await self.config.tracked_ticket_identity_resolved()
+        tracked_key = str(channel.id)
+        if channel.id in tracked and tracked_identity.get(tracked_key, True) and not force:
             return False
 
         await asyncio.sleep(5)
@@ -836,6 +865,10 @@ class ElrondRadar(commands.Cog):
             first_message = await self._first_useful_channel_message(channel, tenant_member.id if tenant_member is not None else None)
         message_excerpt = self._message_excerpt(first_message)
         ticket_username = self._ticket_username(first_message)
+        identity_resolved = tenant_member is not None or bool(ticket_username)
+        if channel.id in tracked and not identity_resolved and not force:
+            return False
+
         visible_members = await self._ticket_visible_members(channel)
         if tenant_member is None and visible_members:
             await self._announce_link_required(channel, visible_members[0])
@@ -843,12 +876,13 @@ class ElrondRadar(commands.Cog):
                 log.info("Elrond radar ticket skipped pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
                 return False
         thread_username = self._thread_username(channel, ticket_username, tenant_member)
-        backend_thread = await self._create_backend_thread(channel, thread_username)
+        channel_thread_name = self._thread_username(channel, "", None)
+        backend_thread, backend_thread_created = await self._create_backend_thread(channel, thread_username, aliases=[channel_thread_name])
         if backend_thread is None:
             log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
             return False
 
-        if await self.config.announce_ticket_link():
+        if backend_thread_created and await self.config.announce_ticket_link():
             try:
                 await channel.send(
                     "Staff backend thread: " + backend_thread.jump_url,
@@ -903,6 +937,9 @@ class ElrondRadar(commands.Cog):
         if status is not None and status < 300:
             tracked.add(channel.id)
             await self.config.tracked_ticket_channel_ids.set(list(tracked)[-500:])
+            tracked_identity[tracked_key] = identity_resolved
+            tracked_identity = {str(item): tracked_identity.get(str(item), True) for item in tracked}
+            await self.config.tracked_ticket_identity_resolved.set(tracked_identity)
             log.info("Elrond radar ticket intake completed: channel=%s backend_thread=%s", channel.id, backend_thread.id)
             return True
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
@@ -1040,19 +1077,24 @@ class ElrondRadar(commands.Cog):
         normalized = " ".join(str(name or "").lower().replace("/", " ").replace("-", " ").split())
         return "account username" in normalized or "elfhosted username" in normalized or normalized == "username"
 
-    async def _create_backend_thread(self, ticket_channel, username: str):
+    async def _create_backend_thread(self, ticket_channel, username: str, aliases=None):
         backend_channel = self.bot.get_channel(await self.config.backend_channel_id())
         if backend_channel is None and ticket_channel.guild is not None:
             try:
                 backend_channel = await ticket_channel.guild.fetch_channel(await self.config.backend_channel_id())
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                return None
+                return None, False
         if backend_channel is None or not hasattr(backend_channel, "create_thread"):
-            return None
+            return None, False
 
         raw_name = username or getattr(ticket_channel, "name", str(ticket_channel.id))
         thread_name = ("🟡 " + raw_name)[:90]
-        existing = await self._find_backend_thread(backend_channel, raw_name)
+        lookup_names = [raw_name, *(aliases or [])]
+        existing = None
+        for lookup_name in lookup_names:
+            existing = await self._find_backend_thread(backend_channel, lookup_name)
+            if existing is not None:
+                break
         if existing is not None:
             try:
                 await existing.edit(name=thread_name, archived=False, locked=False, reason="Elrond support ticket intake reopened")
@@ -1061,23 +1103,25 @@ class ElrondRadar(commands.Cog):
                     await existing.edit(name=thread_name, reason="Elrond support ticket intake reopened")
                 except (discord.Forbidden, discord.HTTPException):
                     pass
-            return existing
+            return existing, False
 
         try:
-            return await backend_channel.create_thread(
+            thread = await backend_channel.create_thread(
                 name=thread_name,
                 type=discord.ChannelType.public_thread,
                 reason="Elrond support ticket intake",
             )
+            return thread, True
         except (discord.Forbidden, discord.HTTPException):
             try:
-                return await backend_channel.create_thread(
+                thread = await backend_channel.create_thread(
                     name=thread_name,
                     type=discord.ChannelType.private_thread,
                     reason="Elrond support ticket intake",
                 )
+                return thread, True
             except (discord.Forbidden, discord.HTTPException):
-                return None
+                return None, False
 
     async def _find_backend_thread(self, backend_channel, username: str):
         wanted = self._normal_thread_name(username)
