@@ -828,6 +828,12 @@ class ElrondRadar(commands.Cog):
         await asyncio.sleep(5)
         tenant_member = await self._ticket_tenant_member(channel)
         first_message = await self._first_useful_channel_message(channel, tenant_member.id if tenant_member is not None else None)
+        for _ in range(5):
+            if tenant_member is not None or first_message is not None:
+                break
+            await asyncio.sleep(3)
+            tenant_member = await self._ticket_tenant_member(channel)
+            first_message = await self._first_useful_channel_message(channel, tenant_member.id if tenant_member is not None else None)
         message_excerpt = self._message_excerpt(first_message)
         ticket_username = self._ticket_username(first_message)
         visible_members = await self._ticket_visible_members(channel)
