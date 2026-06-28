@@ -118,6 +118,12 @@ class ElrondRadar(commands.Cog):
             tracked_ticket_identity_resolved={},
             user_notes={},
         )
+        self._pending_ticket_intake_tasks = {}
+
+    def cog_unload(self):
+        for task in self._pending_ticket_intake_tasks.values():
+            task.cancel()
+        self._pending_ticket_intake_tasks.clear()
 
     def _reactions_intent_state(self) -> str:
         intents = getattr(self.bot, "intents", None)
@@ -178,6 +184,7 @@ class ElrondRadar(commands.Cog):
             f"- ticket category: {cfg.get('ticket_category_id')}\n"
             f"- backend channel: {cfg.get('backend_channel_id')}\n"
             f"- announce ticket link: {cfg.get('announce_ticket_link')}\n"
+            f"- pending ticket intake retries: {len(self._pending_ticket_intake_tasks)}\n"
             f"- allowed users: {len(cfg.get('allowed_user_ids') or [])}\n"
             f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}\n"
             f"- tenant roles: {len(cfg.get('tenant_role_ids') or [])}\n"
@@ -830,10 +837,17 @@ class ElrondRadar(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        self._schedule_ticket_channel_intake(getattr(channel, "id", 0))
+
+    @commands.Cog.listener()
+    async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
         try:
-            await self._handle_ticket_channel_create(channel)
+            ticket_category_id = await self.config.ticket_category_id()
         except Exception:
-            log.exception("Elrond radar ticket intake failed for new channel %s", getattr(channel, "id", "unknown"))
+            log.exception("Elrond radar could not read ticket category for channel update")
+            return
+        if getattr(after, "category_id", None) == ticket_category_id and getattr(before, "category_id", None) != ticket_category_id:
+            self._schedule_ticket_channel_intake(getattr(after, "id", 0))
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
@@ -907,6 +921,36 @@ class ElrondRadar(commands.Cog):
             payload.user_id,
         )
         await self._post_to_elrond(data)
+
+    def _schedule_ticket_channel_intake(self, channel_id: int):
+        if not channel_id:
+            return
+        existing = self._pending_ticket_intake_tasks.get(channel_id)
+        if existing is not None and not existing.done():
+            return
+
+        task = asyncio.create_task(self._retry_ticket_channel_intake(channel_id))
+        self._pending_ticket_intake_tasks[channel_id] = task
+        task.add_done_callback(lambda _: self._pending_ticket_intake_tasks.pop(channel_id, None))
+
+    async def _retry_ticket_channel_intake(self, channel_id: int):
+        for delay in (0, 10, 30, 90):
+            if delay:
+                await asyncio.sleep(delay)
+            try:
+                guild = self.bot.get_guild(await self.config.guild_id())
+                channel = self.bot.get_channel(channel_id)
+                if channel is None and guild is not None:
+                    try:
+                        channel = await guild.fetch_channel(channel_id)
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        channel = None
+                if channel is not None and await self._handle_ticket_channel_create(channel):
+                    return
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("Elrond radar delayed ticket intake failed for channel %s", channel_id)
 
     async def _handle_ticket_channel_create(self, channel: discord.abc.GuildChannel, force: bool = False) -> bool:
         if not await self.config.enabled():
