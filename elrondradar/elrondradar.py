@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Optional, Tuple
 
 import aiohttp
@@ -20,6 +21,8 @@ DEFAULT_LINK_INSTRUCTIONS_CHANNEL_ID = 1392004498611900476
 SUPPORTED_EMOJIS = {"🚨", "🐧", "🏎️", "🏎", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
 DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
+USERNAME_RE = re.compile(r"(?:aa-)?[a-z0-9][a-z0-9-]{1,60}", re.IGNORECASE)
+USERNAME_STOPWORDS = {"account", "elfhosted", "username", "user", "none", "unknown", "not", "sure", "unsure", "na", "n/a"}
 
 
 class DiagnosisRequestModal(discord.ui.Modal):
@@ -597,7 +600,13 @@ class ElrondRadar(commands.Cog):
         return None
 
     def _normalize_username(self, value: str) -> str:
-        return str(value or "").strip().lower().replace("aa-", "", 1).strip("*_~<>:;,. ")
+        clean = str(value or "").strip().lower()
+        clean = clean.replace("`", " ").replace("\u200b", "")
+        for match in USERNAME_RE.findall(clean):
+            username = match.lower().replace("aa-", "", 1).strip("*_~<>:;,. ")
+            if username and username not in USERNAME_STOPWORDS:
+                return username
+        return ""
 
     async def _infer_note_target(self, ctx: commands.Context) -> Tuple[str, str]:
         return await self._infer_note_target_from_channel(ctx.guild, ctx.channel)
@@ -1075,7 +1084,7 @@ class ElrondRadar(commands.Cog):
                 name = str(getattr(field, "name", "") or "").strip()
                 value = str(getattr(field, "value", "") or "").strip()
                 if self._is_ticket_username_field(name) and value:
-                    return value.split()[0].strip("*_~<>:;,. ")
+                    return self._normalize_username(value)
         return ""
 
     def _is_ticket_username_field(self, name: str) -> bool:
