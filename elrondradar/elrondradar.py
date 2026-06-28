@@ -762,7 +762,10 @@ class ElrondRadar(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
-        await self._handle_ticket_channel_create(channel)
+        try:
+            await self._handle_ticket_channel_create(channel)
+        except Exception:
+            log.exception("Elrond radar ticket intake failed for new channel %s", getattr(channel, "id", "unknown"))
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
@@ -848,8 +851,10 @@ class ElrondRadar(commands.Cog):
         if not hasattr(channel, "send") or not hasattr(channel, "history"):
             return False
 
-        tracked = set(await self.config.tracked_ticket_channel_ids())
-        tracked_identity = await self.config.tracked_ticket_identity_resolved()
+        tracked = set(await self.config.tracked_ticket_channel_ids() or [])
+        tracked_identity = await self.config.tracked_ticket_identity_resolved() or {}
+        if not isinstance(tracked_identity, dict):
+            tracked_identity = {}
         tracked_key = str(channel.id)
         if channel.id in tracked and tracked_identity.get(tracked_key, True) and not force:
             return False
@@ -873,8 +878,8 @@ class ElrondRadar(commands.Cog):
         if tenant_member is None and visible_members:
             await self._announce_link_required(channel, visible_members[0])
             if not ticket_username:
-                log.info("Elrond radar ticket skipped pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
-                return False
+                log.info("Elrond radar ticket intake is sparse pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
+        intake_member = tenant_member or (visible_members[0] if visible_members else None)
         thread_username = self._thread_username(channel, ticket_username, tenant_member)
         channel_thread_name = self._thread_username(channel, "", None)
         backend_thread, backend_thread_created = await self._create_backend_thread(channel, thread_username, aliases=[channel_thread_name])
@@ -894,7 +899,7 @@ class ElrondRadar(commands.Cog):
         source_message_id = first_message.id if first_message is not None else channel.id
         ticket_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{guild.id}/{channel.id}"
         user_notes = await self._format_user_notes_for_intake(
-            str(tenant_member.id) if tenant_member is not None else (str(first_message.author.id) if first_message is not None else ""),
+            str(intake_member.id) if intake_member is not None else (str(first_message.author.id) if first_message is not None else ""),
             ticket_username or thread_username,
         )
         intake_lines = [
@@ -924,8 +929,8 @@ class ElrondRadar(commands.Cog):
             "channel_name": getattr(channel, "name", str(channel.id)),
             "message_id": str(source_message_id),
             "message_url": ticket_url,
-            "message_author_id": str(tenant_member.id) if tenant_member is not None else (str(first_message.author.id) if first_message is not None else ""),
-            "message_author_name": str(tenant_member) if tenant_member is not None else (str(first_message.author) if first_message is not None else ""),
+            "message_author_id": str(intake_member.id) if intake_member is not None else (str(first_message.author.id) if first_message is not None else ""),
+            "message_author_name": str(intake_member) if intake_member is not None else (str(first_message.author) if first_message is not None else ""),
             "tenant_username": "" if tenant_member is not None else ticket_username,
             "message_content": message_excerpt,
             "user_notes": user_notes,
