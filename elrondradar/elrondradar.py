@@ -981,7 +981,7 @@ class ElrondRadar(commands.Cog):
             "message_url": ticket_url,
             "message_author_id": str(intake_member.id) if intake_member is not None else (str(first_message.author.id) if first_message is not None else ""),
             "message_author_name": str(intake_member) if intake_member is not None else (str(first_message.author) if first_message is not None else ""),
-            "tenant_username": "" if tenant_member is not None else ticket_username,
+            "tenant_username": ticket_username,
             "message_content": message_excerpt,
             "user_notes": user_notes,
             "backend_thread_id": str(backend_thread.id),
