@@ -318,11 +318,29 @@ class ElrondRadar(commands.Cog):
         source_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{ctx.guild.id}/{channel.id}"
         category_id = getattr(channel, "category_id", None)
         expected_category = await self.config.ticket_category_id()
+        tracked = set(await self.config.tracked_ticket_channel_ids() or [])
+        tracked_identity = await self.config.tracked_ticket_identity_resolved() or {}
+        if not isinstance(tracked_identity, dict):
+            tracked_identity = {}
+        tracked_key = str(channel.id)
+        is_tracked = channel.id in tracked
+        tracked_identity_resolved = tracked_identity.get(tracked_key, True) if is_tracked else None
+        if category_id != expected_category:
+            automatic_state = "skipped: wrong category"
+        elif is_tracked and tracked_identity_resolved:
+            automatic_state = "skipped: already tracked with resolved identity"
+        elif is_tracked and not tracked_identity_resolved and not (tenant_member is not None or ticket_username):
+            automatic_state = "skipped: tracked sparse intake still lacks identity"
+        else:
+            automatic_state = "eligible for automatic intake scan"
 
         lines = [
             "Elrond radar ticket inspection:",
             f"- channel: #{getattr(channel, 'name', channel.id)} ({channel.id})",
             f"- category: {category_id} ({'ok' if category_id == expected_category else 'expected ' + str(expected_category)})",
+            f"- tracked intake: {'yes' if is_tracked else 'no'}",
+            f"- tracked identity resolved: {tracked_identity_resolved if tracked_identity_resolved is not None else 'n/a'}",
+            f"- automatic scan state: {automatic_state}",
             f"- linked discord member: {tenant_member} ({tenant_member.id})" if tenant_member is not None else "- linked discord member: not found",
             f"- modal account username: {ticket_username}" if ticket_username else "- modal account username: not found",
             "- unlinked visible members: " + (", ".join(f"{member} ({member.id})" for member in unlinked_members[:5]) if unlinked_members else "none"),
