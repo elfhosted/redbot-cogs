@@ -240,6 +240,37 @@ class ElrondRadar(commands.Cog):
                     processed += 1
         await ctx.send(f"Elrond radar ticket scan complete: processed {processed}/{attempted} visible channel(s) in category {category_id}. force={force}")
 
+    @elrondradar.command(name="rerunintake", aliases=["rerunticket"])
+    async def rerunintake(self, ctx, channel_id: int):
+        """Force a fresh backend intake for one support ticket channel."""
+        if ctx.guild is None:
+            await ctx.send("Run this in the configured guild.")
+            return
+        if ctx.guild.id != await self.config.guild_id():
+            await ctx.send("This server is not the configured Elrond radar guild.")
+            return
+
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await ctx.guild.fetch_channel(channel_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
+                await ctx.send(f"Could not fetch ticket channel {channel_id}: {exc}")
+                return
+
+        async with ctx.typing():
+            try:
+                processed = await self._handle_ticket_channel_create(channel, force=True)
+            except Exception as exc:
+                log.exception("Elrond radar forced intake failed for channel %s", channel_id)
+                await ctx.send(f"Elrond radar forced intake failed for {channel_id}: {exc}")
+                return
+
+        if processed:
+            await ctx.send(f"Elrond radar forced intake posted for <#{channel_id}>.")
+        else:
+            await ctx.send(f"Elrond radar did not post an intake for <#{channel_id}>. Run inspectticket {channel_id} for details.")
+
     @elrondradar.command(name="inspectticket")
     async def inspectticket(self, ctx, channel_id: int):
         """Show what Redbot can mechanically extract from a support ticket channel."""
