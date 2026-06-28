@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 
 import aiohttp
 import discord
+from discord.ext import tasks
 from redbot.core import Config, app_commands, commands
 
 
@@ -118,6 +119,10 @@ class ElrondRadar(commands.Cog):
             tracked_ticket_identity_resolved={},
             user_notes={},
         )
+        self.ticket_intake_scan.start()
+
+    def cog_unload(self):
+        self.ticket_intake_scan.cancel()
 
     def _reactions_intent_state(self) -> str:
         intents = getattr(self.bot, "intents", None)
@@ -178,6 +183,7 @@ class ElrondRadar(commands.Cog):
             f"- ticket category: {cfg.get('ticket_category_id')}\n"
             f"- backend channel: {cfg.get('backend_channel_id')}\n"
             f"- announce ticket link: {cfg.get('announce_ticket_link')}\n"
+            f"- periodic ticket scanner: {self.ticket_intake_scan.is_running()}\n"
             f"- allowed users: {len(cfg.get('allowed_user_ids') or [])}\n"
             f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}\n"
             f"- tenant roles: {len(cfg.get('tenant_role_ids') or [])}\n"
@@ -999,6 +1005,40 @@ class ElrondRadar(commands.Cog):
             return True
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
         return False
+
+    @tasks.loop(minutes=2)
+    async def ticket_intake_scan(self):
+        if not await self.config.enabled():
+            return
+
+        guild = self.bot.get_guild(await self.config.guild_id())
+        if guild is None:
+            return
+
+        category_id = await self.config.ticket_category_id()
+        candidates = [
+            channel for channel in getattr(guild, "text_channels", [])
+            if getattr(channel, "category_id", None) == category_id
+        ]
+        candidates = sorted(
+            candidates,
+            key=lambda channel: getattr(channel, "created_at", None) or discord.utils.utcnow(),
+            reverse=True,
+        )
+
+        processed = 0
+        for channel in candidates[:50]:
+            try:
+                if await self._handle_ticket_channel_create(channel):
+                    processed += 1
+            except Exception:
+                log.exception("Elrond radar periodic ticket intake failed for channel %s", getattr(channel, "id", "unknown"))
+        if processed:
+            log.info("Elrond radar periodic ticket scan processed %s ticket channel(s)", processed)
+
+    @ticket_intake_scan.before_loop
+    async def before_ticket_intake_scan(self):
+        await self.bot.wait_until_ready()
 
     async def _announce_link_required(self, channel, member):
         link_channel_id = await self.config.link_instructions_channel_id()
