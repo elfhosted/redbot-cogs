@@ -258,6 +258,13 @@ class ElrondRadar(commands.Cog):
                 await ctx.send(f"Could not fetch ticket channel {channel_id}: {exc}")
                 return
 
+        requested_channel = channel
+        category_id = await self.config.ticket_category_id()
+        if getattr(channel, "category_id", None) != category_id:
+            source_channel = await self._source_ticket_channel_from_intake(ctx.guild, channel)
+            if source_channel is not None:
+                channel = source_channel
+
         async with ctx.typing():
             try:
                 processed = await self._handle_ticket_channel_create(channel, force=True)
@@ -267,9 +274,12 @@ class ElrondRadar(commands.Cog):
                 return
 
         if processed:
-            await ctx.send(f"Elrond radar forced intake posted for <#{channel_id}>.")
+            if requested_channel.id == channel.id:
+                await ctx.send(f"Elrond radar forced intake posted for <#{channel.id}>.")
+            else:
+                await ctx.send(f"Elrond radar forced intake posted for <#{channel.id}> from backend thread <#{requested_channel.id}>.")
         else:
-            await ctx.send(f"Elrond radar did not post an intake for <#{channel_id}>. Run inspectticket {channel_id} for details.")
+            await ctx.send(f"Elrond radar did not post an intake for <#{channel.id}>. Run inspectticket {channel.id} for details.")
 
     @elrondradar.command(name="inspectticket")
     async def inspectticket(self, ctx, channel_id: int):
@@ -1047,6 +1057,27 @@ class ElrondRadar(commands.Cog):
         except (discord.Forbidden, discord.HTTPException):
             return None
         return preferred_fallback or fallback
+
+    async def _source_ticket_channel_from_intake(self, guild: Optional[discord.Guild], channel) -> Optional[discord.abc.GuildChannel]:
+        if guild is None or not hasattr(channel, "history"):
+            return None
+        try:
+            async for message in channel.history(limit=10, oldest_first=True):
+                content = str(getattr(message, "content", "") or "")
+                match = re.search(r"Ticket intake for\s+<#(\d+)>", content) or re.search(r"<#(\d+)>", content)
+                if not match:
+                    continue
+                source_channel_id = int(match.group(1))
+                source_channel = self.bot.get_channel(source_channel_id)
+                if source_channel is None:
+                    try:
+                        source_channel = await guild.fetch_channel(source_channel_id)
+                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                        return None
+                return source_channel
+        except (discord.Forbidden, discord.HTTPException):
+            return None
+        return None
 
     def _message_excerpt(self, message: Optional[discord.Message], limit: int = 500) -> str:
         if message is None:
