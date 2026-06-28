@@ -990,11 +990,12 @@ class ElrondRadar(commands.Cog):
             quoted_excerpt = "\n".join("> " + line for line in message_excerpt.splitlines())
             intake_lines.append("Snippet:\n" + quoted_excerpt)
         intake_lines.append("Use the button only when staff want Elrond to run diagnosis.")
-        await backend_thread.send(
-            "\n\n".join(intake_lines),
-            view=DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id),
-            allowed_mentions=discord.AllowedMentions.none(),
-        )
+        if backend_thread_created or force:
+            await backend_thread.send(
+                "\n\n".join(intake_lines),
+                view=DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
         status, body = await self._post_to_elrond({
             "action": "ticket_created",
