@@ -5,7 +5,6 @@ from typing import Optional, Tuple
 
 import aiohttp
 import discord
-from discord.ext import tasks
 from redbot.core import Config, app_commands, commands
 
 
@@ -22,7 +21,6 @@ DEFAULT_LINK_INSTRUCTIONS_CHANNEL_ID = 1392004498611900476
 SUPPORTED_EMOJIS = {"🚨", "🐧", "🏎️", "🏎", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
 DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
-PERIODIC_TICKET_SCAN_LIMIT = 200
 USERNAME_RE = re.compile(r"(?:aa-)?[a-z0-9][a-z0-9-]{1,60}", re.IGNORECASE)
 USERNAME_STOPWORDS = {"account", "elfhosted", "username", "user", "none", "unknown", "not", "sure", "unsure", "na", "n/a"}
 
@@ -120,10 +118,6 @@ class ElrondRadar(commands.Cog):
             tracked_ticket_identity_resolved={},
             user_notes={},
         )
-        self.ticket_intake_scan.start()
-
-    def cog_unload(self):
-        self.ticket_intake_scan.cancel()
 
     def _reactions_intent_state(self) -> str:
         intents = getattr(self.bot, "intents", None)
@@ -184,7 +178,6 @@ class ElrondRadar(commands.Cog):
             f"- ticket category: {cfg.get('ticket_category_id')}\n"
             f"- backend channel: {cfg.get('backend_channel_id')}\n"
             f"- announce ticket link: {cfg.get('announce_ticket_link')}\n"
-            f"- periodic ticket scanner: {self.ticket_intake_scan.is_running()}\n"
             f"- allowed users: {len(cfg.get('allowed_user_ids') or [])}\n"
             f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}\n"
             f"- tenant roles: {len(cfg.get('tenant_role_ids') or [])}\n"
@@ -1028,47 +1021,6 @@ class ElrondRadar(commands.Cog):
             return True
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
         return False
-
-    @tasks.loop(minutes=2)
-    async def ticket_intake_scan(self):
-        if not await self.config.enabled():
-            return
-
-        guild = self.bot.get_guild(await self.config.guild_id())
-        if guild is None:
-            return
-
-        category_id = await self.config.ticket_category_id()
-        candidates = [
-            channel for channel in getattr(guild, "text_channels", [])
-            if getattr(channel, "category_id", None) == category_id
-        ]
-        tracked = set(await self.config.tracked_ticket_channel_ids() or [])
-        tracked_identity = await self.config.tracked_ticket_identity_resolved() or {}
-        if not isinstance(tracked_identity, dict):
-            tracked_identity = {}
-        candidates = sorted(
-            candidates,
-            key=lambda channel: (
-                channel.id not in tracked or not tracked_identity.get(str(channel.id), True),
-                getattr(channel, "created_at", None) or discord.utils.utcnow(),
-            ),
-            reverse=True,
-        )
-
-        processed = 0
-        for channel in candidates[:PERIODIC_TICKET_SCAN_LIMIT]:
-            try:
-                if await self._handle_ticket_channel_create(channel):
-                    processed += 1
-            except Exception:
-                log.exception("Elrond radar periodic ticket intake failed for channel %s", getattr(channel, "id", "unknown"))
-        if processed:
-            log.info("Elrond radar periodic ticket scan processed %s ticket channel(s)", processed)
-
-    @ticket_intake_scan.before_loop
-    async def before_ticket_intake_scan(self):
-        await self.bot.wait_until_ready()
 
     async def _announce_link_required(self, channel, member):
         link_channel_id = await self.config.link_instructions_channel_id()
