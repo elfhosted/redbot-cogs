@@ -837,6 +837,11 @@ class ElrondRadar(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        log.info(
+            "Elrond radar saw channel create: channel=%s category=%s",
+            getattr(channel, "id", "unknown"),
+            getattr(channel, "category_id", None),
+        )
         self._schedule_ticket_channel_intake(getattr(channel, "id", 0))
 
     @commands.Cog.listener()
@@ -847,6 +852,11 @@ class ElrondRadar(commands.Cog):
             log.exception("Elrond radar could not read ticket category for channel update")
             return
         if getattr(after, "category_id", None) == ticket_category_id and getattr(before, "category_id", None) != ticket_category_id:
+            log.info(
+                "Elrond radar saw channel move into ticket category: channel=%s category=%s",
+                getattr(after, "id", "unknown"),
+                getattr(after, "category_id", None),
+            )
             self._schedule_ticket_channel_intake(getattr(after, "id", 0))
 
     @commands.Cog.listener()
@@ -927,8 +937,10 @@ class ElrondRadar(commands.Cog):
             return
         existing = self._pending_ticket_intake_tasks.get(channel_id)
         if existing is not None and not existing.done():
+            log.info("Elrond radar ticket intake retry already pending: channel=%s", channel_id)
             return
 
+        log.info("Elrond radar scheduled ticket intake retry: channel=%s", channel_id)
         task = asyncio.create_task(self._retry_ticket_channel_intake(channel_id))
         self._pending_ticket_intake_tasks[channel_id] = task
         task.add_done_callback(lambda _: self._pending_ticket_intake_tasks.pop(channel_id, None))
@@ -945,12 +957,57 @@ class ElrondRadar(commands.Cog):
                         channel = await guild.fetch_channel(channel_id)
                     except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                         channel = None
-                if channel is not None and await self._handle_ticket_channel_create(channel):
+                if channel is None:
+                    log.info("Elrond radar ticket intake retry skipped: channel=%s reason=not-found delay=%s", channel_id, delay)
+                    continue
+                precheck = await self._ticket_intake_precheck_skip_reason(channel)
+                if precheck:
+                    log.info(
+                        "Elrond radar ticket intake retry skipped: channel=%s category=%s reason=%s delay=%s",
+                        channel_id,
+                        getattr(channel, "category_id", None),
+                        precheck,
+                        delay,
+                    )
+                    continue
+                log.info(
+                    "Elrond radar ticket intake retry attempting: channel=%s category=%s delay=%s",
+                    channel_id,
+                    getattr(channel, "category_id", None),
+                    delay,
+                )
+                if await self._handle_ticket_channel_create(channel):
+                    log.info("Elrond radar ticket intake retry succeeded: channel=%s", channel_id)
                     return
             except asyncio.CancelledError:
                 raise
             except Exception:
                 log.exception("Elrond radar delayed ticket intake failed for channel %s", channel_id)
+        log.info("Elrond radar ticket intake retry exhausted: channel=%s", channel_id)
+
+    async def _ticket_intake_precheck_skip_reason(self, channel: discord.abc.GuildChannel, force: bool = False) -> str:
+        if not await self.config.enabled():
+            return "disabled"
+        guild = getattr(channel, "guild", None)
+        if guild is None:
+            return "missing-guild"
+        configured_guild_id = await self.config.guild_id()
+        if guild.id != configured_guild_id:
+            return f"wrong-guild:{guild.id}!={configured_guild_id}"
+        ticket_category_id = await self.config.ticket_category_id()
+        category_id = getattr(channel, "category_id", None)
+        if category_id != ticket_category_id:
+            return f"wrong-category:{category_id}!={ticket_category_id}"
+        if not hasattr(channel, "send") or not hasattr(channel, "history"):
+            return "not-readable-text-channel"
+        tracked = set(await self.config.tracked_ticket_channel_ids() or [])
+        tracked_identity = await self.config.tracked_ticket_identity_resolved() or {}
+        if not isinstance(tracked_identity, dict):
+            tracked_identity = {}
+        tracked_key = str(channel.id)
+        if channel.id in tracked and tracked_identity.get(tracked_key, True) and not force:
+            return "tracked-resolved"
+        return ""
 
     async def _handle_ticket_channel_create(self, channel: discord.abc.GuildChannel, force: bool = False) -> bool:
         if not await self.config.enabled():
