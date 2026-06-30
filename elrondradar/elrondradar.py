@@ -338,12 +338,29 @@ class ElrondRadar(commands.Cog):
         else:
             automatic_state = "eligible for automatic intake scan"
 
+        backend_thread = None
+        thread_username = self._thread_username(channel, ticket_username, tenant_member)
+        channel_thread_name = self._thread_username(channel, "", None)
+        backend_channel = await self._backend_channel(channel)
+        if backend_channel is not None:
+            for lookup_name in (thread_username, channel_thread_name):
+                backend_thread = await self._find_backend_thread(backend_channel, lookup_name)
+                if backend_thread is not None:
+                    break
+        backend_thread_line = "- backend thread: not found"
+        if backend_thread is not None:
+            backend_thread_url = getattr(backend_thread, "jump_url", "")
+            backend_thread_line = f"- backend thread: #{getattr(backend_thread, 'name', backend_thread.id)} ({backend_thread.id})"
+            if backend_thread_url:
+                backend_thread_line += f" {backend_thread_url}"
+
         lines = [
             "Elrond radar ticket inspection:",
             f"- channel: #{getattr(channel, 'name', channel.id)} ({channel.id})",
             f"- category: {category_id} ({'ok' if category_id == expected_category else 'expected ' + str(expected_category)})",
             f"- tracked intake: {'yes' if is_tracked else 'no'}",
             f"- backend notice posted: {'yes' if channel.id in tracked_notices else 'no'}",
+            backend_thread_line,
             f"- tracked identity resolved: {tracked_identity_resolved if tracked_identity_resolved is not None else 'n/a'}",
             f"- automatic scan state: {automatic_state}",
             f"- linked discord member: {tenant_member} ({tenant_member.id})" if tenant_member is not None else "- linked discord member: not found",
@@ -1061,15 +1078,6 @@ class ElrondRadar(commands.Cog):
             log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
             return False
 
-        if backend_thread_created and await self.config.announce_ticket_link():
-            try:
-                await channel.send(
-                    "Staff backend thread: " + backend_thread.jump_url,
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
-            except (discord.Forbidden, discord.HTTPException) as exc:
-                log.warning("Elrond radar could not announce backend thread in ticket %s: %s", channel.id, exc)
-
         source_message_id = first_message.id if first_message is not None else channel.id
         ticket_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{guild.id}/{channel.id}"
         user_notes = await self._format_user_notes_for_intake(
@@ -1103,6 +1111,14 @@ class ElrondRadar(commands.Cog):
             tracked_notice_ids = tracked_notice_ids[-500:]
             await self.config.tracked_ticket_backend_notice_ids.set(tracked_notice_ids)
             log.info("Elrond radar posted backend ticket notice: channel=%s backend_thread=%s reused=%s", channel.id, backend_thread.id, not backend_thread_created)
+            if await self.config.announce_ticket_link():
+                try:
+                    await channel.send(
+                        "Staff backend thread: " + backend_thread.jump_url,
+                        allowed_mentions=discord.AllowedMentions.none(),
+                    )
+                except (discord.Forbidden, discord.HTTPException) as exc:
+                    log.warning("Elrond radar could not announce backend thread in ticket %s: %s", channel.id, exc)
 
         status, body = await self._post_to_elrond({
             "action": "ticket_created",
@@ -1288,13 +1304,17 @@ class ElrondRadar(commands.Cog):
         normalized = " ".join(str(name or "").lower().replace("/", " ").replace("-", " ").split())
         return "account username" in normalized or "elfhosted username" in normalized or normalized == "username"
 
-    async def _create_backend_thread(self, ticket_channel, username: str, aliases=None):
+    async def _backend_channel(self, ticket_channel):
         backend_channel = self.bot.get_channel(await self.config.backend_channel_id())
         if backend_channel is None and ticket_channel.guild is not None:
             try:
                 backend_channel = await ticket_channel.guild.fetch_channel(await self.config.backend_channel_id())
             except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                return None, False
+                return None
+        return backend_channel
+
+    async def _create_backend_thread(self, ticket_channel, username: str, aliases=None):
+        backend_channel = await self._backend_channel(ticket_channel)
         if backend_channel is None or not hasattr(backend_channel, "create_thread"):
             return None, False
 
