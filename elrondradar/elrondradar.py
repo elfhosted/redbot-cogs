@@ -116,6 +116,8 @@ class ElrondRadar(commands.Cog):
             announce_ticket_link=True,
             tracked_ticket_channel_ids=[],
             tracked_ticket_backend_notice_ids=[],
+            tracked_ticket_backend_link_notice_ids=[],
+            tracked_ticket_link_notice_ids=[],
             tracked_ticket_identity_resolved={},
             user_notes={},
         )
@@ -221,6 +223,8 @@ class ElrondRadar(commands.Cog):
         """Clear tracked ticket IDs so category scan/create can retry intake."""
         await self.config.tracked_ticket_channel_ids.set([])
         await self.config.tracked_ticket_backend_notice_ids.set([])
+        await self.config.tracked_ticket_backend_link_notice_ids.set([])
+        await self.config.tracked_ticket_link_notice_ids.set([])
         await self.config.tracked_ticket_identity_resolved.set({})
         await ctx.send("Elrond radar tracked ticket cache cleared.")
 
@@ -323,6 +327,8 @@ class ElrondRadar(commands.Cog):
         expected_category = await self.config.ticket_category_id()
         tracked = set(await self.config.tracked_ticket_channel_ids() or [])
         tracked_notices = set(await self.config.tracked_ticket_backend_notice_ids() or [])
+        tracked_backend_links = set(await self.config.tracked_ticket_backend_link_notice_ids() or [])
+        tracked_link_notices = set(await self.config.tracked_ticket_link_notice_ids() or [])
         tracked_identity = await self.config.tracked_ticket_identity_resolved() or {}
         if not isinstance(tracked_identity, dict):
             tracked_identity = {}
@@ -360,6 +366,8 @@ class ElrondRadar(commands.Cog):
             f"- category: {category_id} ({'ok' if category_id == expected_category else 'expected ' + str(expected_category)})",
             f"- tracked intake: {'yes' if is_tracked else 'no'}",
             f"- backend notice posted: {'yes' if channel.id in tracked_notices else 'no'}",
+            f"- backend link posted in ticket: {'yes' if channel.id in tracked_backend_links else 'no'}",
+            f"- link-required notice posted: {'yes' if channel.id in tracked_link_notices else 'no'}",
             backend_thread_line,
             f"- tracked identity resolved: {tracked_identity_resolved if tracked_identity_resolved is not None else 'n/a'}",
             f"- automatic scan state: {automatic_state}",
@@ -1043,6 +1051,8 @@ class ElrondRadar(commands.Cog):
 
         tracked = set(await self.config.tracked_ticket_channel_ids() or [])
         tracked_notices = set(await self.config.tracked_ticket_backend_notice_ids() or [])
+        tracked_backend_links = set(await self.config.tracked_ticket_backend_link_notice_ids() or [])
+        tracked_link_notices = set(await self.config.tracked_ticket_link_notice_ids() or [])
         tracked_identity = await self.config.tracked_ticket_identity_resolved() or {}
         if not isinstance(tracked_identity, dict):
             tracked_identity = {}
@@ -1066,10 +1076,12 @@ class ElrondRadar(commands.Cog):
             return False
 
         visible_members = await self._ticket_visible_members(channel)
-        if tenant_member is None and visible_members:
-            await self._announce_link_required(channel, visible_members[0])
-            if not ticket_username:
-                log.info("Elrond radar ticket intake is sparse pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
+        if tenant_member is None and visible_members and not ticket_username:
+            if channel.id not in tracked_link_notices:
+                if await self._announce_link_required(channel, visible_members[0]):
+                    await self._append_tracked_ticket_id(self.config.tracked_ticket_link_notice_ids, channel.id)
+                    tracked_link_notices.add(channel.id)
+            log.info("Elrond radar ticket intake is sparse pending Discord link: channel=%s user=%s", channel.id, visible_members[0].id)
         intake_member = tenant_member or (visible_members[0] if visible_members else None)
         thread_username = self._thread_username(channel, ticket_username, tenant_member)
         channel_thread_name = self._thread_username(channel, "", None)
@@ -1105,20 +1117,19 @@ class ElrondRadar(commands.Cog):
                 view=DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
-            tracked_notice_ids = await self.config.tracked_ticket_backend_notice_ids() or []
-            tracked_notice_ids = [item for item in tracked_notice_ids if item != channel.id]
-            tracked_notice_ids.append(channel.id)
-            tracked_notice_ids = tracked_notice_ids[-500:]
-            await self.config.tracked_ticket_backend_notice_ids.set(tracked_notice_ids)
+            await self._append_tracked_ticket_id(self.config.tracked_ticket_backend_notice_ids, channel.id)
+            tracked_notices.add(channel.id)
             log.info("Elrond radar posted backend ticket notice: channel=%s backend_thread=%s reused=%s", channel.id, backend_thread.id, not backend_thread_created)
-            if await self.config.announce_ticket_link():
-                try:
-                    await channel.send(
-                        "Staff backend thread: " + backend_thread.jump_url,
-                        allowed_mentions=discord.AllowedMentions.none(),
-                    )
-                except (discord.Forbidden, discord.HTTPException) as exc:
-                    log.warning("Elrond radar could not announce backend thread in ticket %s: %s", channel.id, exc)
+        if await self.config.announce_ticket_link() and channel.id not in tracked_backend_links:
+            try:
+                await channel.send(
+                    "Staff backend thread: " + backend_thread.jump_url,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
+                await self._append_tracked_ticket_id(self.config.tracked_ticket_backend_link_notice_ids, channel.id)
+                tracked_backend_links.add(channel.id)
+            except (discord.Forbidden, discord.HTTPException) as exc:
+                log.warning("Elrond radar could not announce backend thread in ticket %s: %s", channel.id, exc)
 
         status, body = await self._post_to_elrond({
             "action": "ticket_created",
@@ -1160,8 +1171,17 @@ class ElrondRadar(commands.Cog):
                 f"Please follow the instructions in {link_target}, then staff can retry intake.",
                 allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
             )
+            return True
         except (discord.Forbidden, discord.HTTPException) as exc:
             log.warning("Elrond radar could not announce Discord linking instructions in ticket %s: %s", channel.id, exc)
+            return False
+
+    async def _append_tracked_ticket_id(self, config_value, channel_id: int):
+        tracked_ids = await config_value() or []
+        tracked_ids = [item for item in tracked_ids if item != channel_id]
+        tracked_ids.append(channel_id)
+        tracked_ids = tracked_ids[-500:]
+        await config_value.set(tracked_ids)
 
     async def _ticket_tenant_member(self, channel):
         tenant_roles = set(await self.config.tenant_role_ids())
