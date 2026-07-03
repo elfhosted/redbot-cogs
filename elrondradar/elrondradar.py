@@ -28,7 +28,7 @@ USERNAME_STOPWORDS = {"account", "elfhosted", "username", "user", "none", "unkno
 class DiagnosisRequestModal(discord.ui.Modal):
     """Collect staff context before asking Elrond to spend diagnosis tokens."""
 
-    def __init__(self, cog, ticket_channel_id: int, ticket_channel_name: str, ticket_url: str, backend_thread_id: int, source_message_id: int):
+    def __init__(self, cog, ticket_channel_id: int, ticket_channel_name: str, ticket_url: str, backend_thread_id: int, source_message_id: int, tenant_username: str = ""):
         super().__init__(title="Elrond diagnosis")
         self.cog = cog
         self.ticket_channel_id = ticket_channel_id
@@ -36,6 +36,7 @@ class DiagnosisRequestModal(discord.ui.Modal):
         self.ticket_url = ticket_url
         self.backend_thread_id = backend_thread_id
         self.source_message_id = source_message_id
+        self.tenant_username = tenant_username
         self.context = discord.ui.TextInput(
             label="What should Elrond focus on?",
             style=discord.TextStyle.paragraph,
@@ -54,6 +55,7 @@ class DiagnosisRequestModal(discord.ui.Modal):
             "channel_name": self.ticket_channel_name,
             "message_id": str(self.source_message_id),
             "message_url": self.ticket_url,
+            "tenant_username": self.tenant_username,
             "message_content": str(self.context.value or "").strip(),
             "backend_thread_id": str(self.backend_thread_id),
             "backend_thread_url": getattr(interaction.channel, "jump_url", ""),
@@ -72,8 +74,9 @@ class DiagnosisRequestModal(discord.ui.Modal):
 class DiagnosisRequestView(discord.ui.View):
     """Button wrapper that opens the diagnosis modal on demand."""
 
-    def __init__(self, cog, ticket_channel_id: int, ticket_channel_name: str, ticket_url: str, backend_thread_id: int, source_message_id: int):
+    def __init__(self, cog, ticket_channel_id: int, ticket_channel_name: str, ticket_url: str, backend_thread_id: int, source_message_id: int, tenant_username: str = ""):
         super().__init__(timeout=None)
+        self.tenant_username = tenant_username
         button = discord.ui.Button(
             label="Activate Elrond diagnosis",
             style=discord.ButtonStyle.primary,
@@ -89,7 +92,7 @@ class DiagnosisRequestView(discord.ui.View):
                 await interaction.response.send_message("Only authorised staff can activate Elrond diagnosis.", ephemeral=True)
                 return
             await interaction.response.send_modal(
-                DiagnosisRequestModal(cog, ticket_channel_id, ticket_channel_name, ticket_url, backend_thread_id, source_message_id)
+                DiagnosisRequestModal(cog, ticket_channel_id, ticket_channel_name, ticket_url, backend_thread_id, source_message_id, self.tenant_username)
             )
 
         button.callback = callback
@@ -1114,7 +1117,7 @@ class ElrondRadar(commands.Cog):
         if should_post_backend_notice:
             await backend_thread.send(
                 "\n\n".join(intake_lines),
-                view=DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id),
+                view=DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id, ticket_username),
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             await self._append_tracked_ticket_id(self.config.tracked_ticket_backend_notice_ids, channel.id)
