@@ -20,6 +20,7 @@ DEFAULT_TENANT_ROLE_IDS = [1391914584440311840]
 DEFAULT_LINK_INSTRUCTIONS_CHANNEL_ID = 1392004498611900476
 SUPPORTED_EMOJIS = {"🚨", "🐧", "🏎️", "🏎", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
+DEFAULT_ADDITIONAL_TICKET_CATEGORY_IDS = [1310419382169501767]
 DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
 USERNAME_RE = re.compile(r"(?:aa-)?[a-z0-9][a-z0-9-]{1,60}", re.IGNORECASE)
 USERNAME_STOPWORDS = {"account", "elfhosted", "username", "user", "none", "unknown", "not", "sure", "unsure", "na", "n/a"}
@@ -115,6 +116,7 @@ class ElrondRadar(commands.Cog):
             tenant_role_ids=DEFAULT_TENANT_ROLE_IDS,
             link_instructions_channel_id=DEFAULT_LINK_INSTRUCTIONS_CHANNEL_ID,
             ticket_category_id=DEFAULT_TICKET_CATEGORY_ID,
+            ticket_category_ids=DEFAULT_ADDITIONAL_TICKET_CATEGORY_IDS,
             backend_channel_id=DEFAULT_BACKEND_CHANNEL_ID,
             announce_ticket_link=True,
             tracked_ticket_channel_ids=[],
@@ -145,6 +147,19 @@ class ElrondRadar(commands.Cog):
     def _is_supported_emoji(self, emoji) -> bool:
         text = str(emoji or "").strip()
         return text in SUPPORTED_EMOJIS or self._normalized_emoji(text) in SUPPORTED_EMOJIS
+
+    async def _ticket_category_ids(self):
+        category_ids = []
+        primary = await self.config.ticket_category_id()
+        if primary:
+            category_ids.append(primary)
+        for category_id in await self.config.ticket_category_ids() or []:
+            if category_id:
+                category_ids.append(category_id)
+        return list(dict.fromkeys(category_ids))
+
+    async def _is_ticket_category(self, channel) -> bool:
+        return getattr(channel, "category_id", None) in set(await self._ticket_category_ids())
 
     @commands.group(name="elrondradar")
     @commands.admin_or_permissions(manage_guild=True)
@@ -188,6 +203,7 @@ class ElrondRadar(commands.Cog):
             f"- token: {token_state}\n"
             f"- reactions intent: {self._reactions_intent_state()}\n"
             f"- ticket category: {cfg.get('ticket_category_id')}\n"
+            f"- extra ticket categories: {', '.join(str(item) for item in cfg.get('ticket_category_ids') or []) or 'none'}\n"
             f"- backend channel: {cfg.get('backend_channel_id')}\n"
             f"- announce ticket link: {cfg.get('announce_ticket_link')}\n"
             f"- pending ticket intake retries: {len(self._pending_ticket_intake_tasks)}\n"
@@ -202,6 +218,28 @@ class ElrondRadar(commands.Cog):
         """Set the Discord category ID watched for fresh support tickets."""
         await self.config.ticket_category_id.set(category_id)
         await ctx.send("Elrond radar ticket category updated.")
+
+    @elrondradar.command(name="addticketcategory")
+    async def addticketcategory(self, ctx, category_id: int):
+        """Add a Discord category ID watched for fresh support tickets."""
+        category_ids = await self._ticket_category_ids()
+        category_ids.append(category_id)
+        category_ids = list(dict.fromkeys(category_ids))
+        primary = await self.config.ticket_category_id()
+        extra_ids = [item for item in category_ids if item != primary]
+        await self.config.ticket_category_ids.set(extra_ids)
+        await ctx.send(f"Elrond radar ticket categories updated: {', '.join(str(item) for item in category_ids)}")
+
+    @elrondradar.command(name="removeticketcategory")
+    async def removeticketcategory(self, ctx, category_id: int):
+        """Remove an extra Discord category ID watched for fresh support tickets."""
+        primary = await self.config.ticket_category_id()
+        if category_id == primary:
+            await ctx.send("Use setticketcategory to change the primary ticket category.")
+            return
+        category_ids = [item for item in await self._ticket_category_ids() if item != category_id]
+        await self.config.ticket_category_ids.set([item for item in category_ids if item != primary])
+        await ctx.send(f"Elrond radar ticket categories updated: {', '.join(str(item) for item in category_ids) or 'none'}")
 
     @elrondradar.command(name="setbackendchannel")
     async def setbackendchannel(self, ctx, channel_id: int):
@@ -241,10 +279,10 @@ class ElrondRadar(commands.Cog):
             await ctx.send("This server is not the configured Elrond radar guild.")
             return
 
-        category_id = await self.config.ticket_category_id()
+        category_ids = set(await self._ticket_category_ids())
         candidates = [
             channel for channel in getattr(ctx.guild, "text_channels", [])
-            if getattr(channel, "category_id", None) == category_id
+            if getattr(channel, "category_id", None) in category_ids
         ]
         candidates = sorted(candidates, key=lambda channel: getattr(channel, "created_at", None) or discord.utils.utcnow(), reverse=True)
         processed = 0
@@ -254,7 +292,7 @@ class ElrondRadar(commands.Cog):
                 attempted += 1
                 if await self._handle_ticket_channel_create(channel, force=force):
                     processed += 1
-        await ctx.send(f"Elrond radar ticket scan complete: processed {processed}/{attempted} visible channel(s) in category {category_id}. force={force}")
+        await ctx.send(f"Elrond radar ticket scan complete: processed {processed}/{attempted} visible channel(s) in categories {', '.join(str(item) for item in category_ids)}. force={force}")
 
     @elrondradar.command(name="rerunintake", aliases=["rerunticket"])
     async def rerunintake(self, ctx, channel_id: int):
@@ -275,8 +313,8 @@ class ElrondRadar(commands.Cog):
                 return
 
         requested_channel = channel
-        category_id = await self.config.ticket_category_id()
-        if getattr(channel, "category_id", None) != category_id:
+        category_ids = set(await self._ticket_category_ids())
+        if getattr(channel, "category_id", None) not in category_ids:
             source_channel = await self._source_ticket_channel_from_intake(ctx.guild, channel)
             if source_channel is not None:
                 channel = source_channel
@@ -327,7 +365,7 @@ class ElrondRadar(commands.Cog):
         excerpt = self._message_excerpt(first_message, limit=900)
         source_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{ctx.guild.id}/{channel.id}"
         category_id = getattr(channel, "category_id", None)
-        expected_category = await self.config.ticket_category_id()
+        expected_categories = set(await self._ticket_category_ids())
         tracked = set(await self.config.tracked_ticket_channel_ids() or [])
         tracked_notices = set(await self.config.tracked_ticket_backend_notice_ids() or [])
         tracked_backend_links = set(await self.config.tracked_ticket_backend_link_notice_ids() or [])
@@ -338,7 +376,7 @@ class ElrondRadar(commands.Cog):
         tracked_key = str(channel.id)
         is_tracked = channel.id in tracked
         tracked_identity_resolved = tracked_identity.get(tracked_key, True) if is_tracked else None
-        if category_id != expected_category:
+        if category_id not in expected_categories:
             automatic_state = "skipped: wrong category"
         elif is_tracked and tracked_identity_resolved:
             automatic_state = "skipped: already tracked with resolved identity"
@@ -366,7 +404,7 @@ class ElrondRadar(commands.Cog):
         lines = [
             "Elrond radar ticket inspection:",
             f"- channel: #{getattr(channel, 'name', channel.id)} ({channel.id})",
-            f"- category: {category_id} ({'ok' if category_id == expected_category else 'expected ' + str(expected_category)})",
+            f"- category: {category_id} ({'ok' if category_id in expected_categories else 'expected one of ' + ', '.join(str(item) for item in expected_categories)})",
             f"- tracked intake: {'yes' if is_tracked else 'no'}",
             f"- backend notice posted: {'yes' if channel.id in tracked_notices else 'no'}",
             f"- backend link posted in ticket: {'yes' if channel.id in tracked_backend_links else 'no'}",
@@ -653,7 +691,7 @@ class ElrondRadar(commands.Cog):
     async def _block_prefix_usernote_in_ticket(self, ctx: commands.Context) -> bool:
         if getattr(ctx, "interaction", None) is not None:
             return False
-        if getattr(ctx.channel, "category_id", None) != await self.config.ticket_category_id():
+        if not await self._is_ticket_category(ctx.channel):
             return False
         try:
             await ctx.message.delete()
@@ -713,7 +751,7 @@ class ElrondRadar(commands.Cog):
         if channel is None:
             return "", ""
 
-        if getattr(channel, "category_id", None) == await self.config.ticket_category_id():
+        if await self._is_ticket_category(channel):
             tenant_member = await self._ticket_tenant_member(channel)
             if tenant_member is not None:
                 return f"discord:{tenant_member.id}", str(tenant_member)
@@ -879,11 +917,11 @@ class ElrondRadar(commands.Cog):
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
         try:
-            ticket_category_id = await self.config.ticket_category_id()
+            ticket_category_ids = set(await self._ticket_category_ids())
         except Exception:
             log.exception("Elrond radar could not read ticket category for channel update")
             return
-        if getattr(after, "category_id", None) == ticket_category_id and getattr(before, "category_id", None) != ticket_category_id:
+        if getattr(after, "category_id", None) in ticket_category_ids and getattr(before, "category_id", None) not in ticket_category_ids:
             log.info(
                 "Elrond radar saw channel move into ticket category: channel=%s category=%s",
                 getattr(after, "id", "unknown"),
@@ -905,10 +943,10 @@ class ElrondRadar(commands.Cog):
         if guild is None or guild.id != await self.config.guild_id():
             return
 
-        category_id = await self.config.ticket_category_id()
+        category_ids = set(await self._ticket_category_ids())
         channels = [
             channel for channel in getattr(guild, "text_channels", [])
-            if getattr(channel, "category_id", None) == category_id
+            if getattr(channel, "category_id", None) in category_ids
         ]
         for channel in channels:
             visible_members = await self._ticket_visible_members(channel)
@@ -1026,10 +1064,10 @@ class ElrondRadar(commands.Cog):
         configured_guild_id = await self.config.guild_id()
         if guild.id != configured_guild_id:
             return f"wrong-guild:{guild.id}!={configured_guild_id}"
-        ticket_category_id = await self.config.ticket_category_id()
+        ticket_category_ids = set(await self._ticket_category_ids())
         category_id = getattr(channel, "category_id", None)
-        if category_id != ticket_category_id:
-            return f"wrong-category:{category_id}!={ticket_category_id}"
+        if category_id not in ticket_category_ids:
+            return f"wrong-category:{category_id}!={','.join(str(item) for item in ticket_category_ids)}"
         if not hasattr(channel, "send") or not hasattr(channel, "history"):
             return "not-readable-text-channel"
         tracked = set(await self.config.tracked_ticket_channel_ids() or [])
@@ -1047,7 +1085,7 @@ class ElrondRadar(commands.Cog):
         guild = getattr(channel, "guild", None)
         if guild is None or guild.id != await self.config.guild_id():
             return False
-        if getattr(channel, "category_id", None) != await self.config.ticket_category_id():
+        if not await self._is_ticket_category(channel):
             return False
         if not hasattr(channel, "send") or not hasattr(channel, "history"):
             return False
