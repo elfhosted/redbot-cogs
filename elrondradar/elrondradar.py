@@ -63,13 +63,11 @@ class DiagnosisRequestModal(discord.ui.Modal):
             "staff_discord_id": str(interaction.user.id),
             "staff_display_name": getattr(interaction.user, "display_name", str(interaction.user)),
         }
-        status, body = await self.cog._post_to_elrond(data)
-        if status is None:
-            await interaction.response.send_message("Elrond diagnosis request failed: endpoint or token is not configured.", ephemeral=True)
-        elif status >= 300:
-            await interaction.response.send_message(f"Elrond diagnosis request failed: HTTP {status} {body[:300]}", ephemeral=True)
-        else:
-            await interaction.response.send_message("Elrond diagnosis request queued.", ephemeral=True)
+        await self.cog._post_legacy_diagnosis_request_notice(data)
+        await interaction.response.send_message(
+            "Legacy OpenClaw diagnosis is disabled. I posted a Hermes Elrond diagnosis request into the backend thread; mention Elrond there if it does not auto-start.",
+            ephemeral=True,
+        )
 
 
 class DiagnosisRequestView(discord.ui.View):
@@ -872,6 +870,48 @@ class ElrondRadar(commands.Cog):
                 continue
         return None
 
+
+    async def _post_legacy_diagnosis_request_notice(self, data: dict) -> None:
+        """Bridge the old Redbot diagnosis button to the Hermes-era workflow.
+
+        The original button POSTed to the OpenClaw service endpoint. That central
+        bot is intentionally scaled down during the Hermes Elrond cutover, so the
+        old HTTP endpoint now refuses connections. Keep the button safe by posting
+        deterministic context into the staff backend thread instead of calling the
+        retired service.
+        """
+        backend_thread_id = int(str(data.get("backend_thread_id") or "0") or 0)
+        if not backend_thread_id:
+            return
+        channel = self.bot.get_channel(backend_thread_id)
+        if channel is None:
+            guild_id = int(str(data.get("guild_id") or await self.config.guild_id() or 0) or 0)
+            guild = self.bot.get_guild(guild_id) if guild_id else None
+            if guild is not None:
+                try:
+                    channel = await guild.fetch_channel(backend_thread_id)
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    channel = None
+        if channel is None or not hasattr(channel, "send"):
+            log.warning("Elrond radar could not post Hermes diagnosis request notice: backend_thread=%s", backend_thread_id)
+            return
+
+        tenant = str(data.get("tenant_username") or "").strip()
+        focus = str(data.get("message_content") or "").strip()
+        ticket_url = str(data.get("message_url") or "").strip()
+        staff = str(data.get("staff_display_name") or data.get("staff_discord_id") or "staff").strip()
+        lines = [
+            "🧠 Hermes Elrond diagnosis requested by " + staff + ".",
+        ]
+        if tenant:
+            lines.append("Account: `" + tenant + "`")
+        if ticket_url:
+            lines.append("Ticket: " + ticket_url)
+        if focus:
+            lines.append("Focus:\n" + "\n".join("> " + line for line in focus.splitlines()))
+        lines.append("Mention Elrond in this thread to run the Hermes diagnosis/action flow. The retired OpenClaw endpoint was not called.")
+        await channel.send("\n\n".join(lines), allowed_mentions=discord.AllowedMentions.none())
+
     async def _post_to_elrond(self, data: dict) -> Tuple[Optional[int], str]:
         endpoint_url = (await self.config.endpoint_url()).strip()
         gateway_token = (await self.config.gateway_token()).strip()
@@ -1150,7 +1190,7 @@ class ElrondRadar(commands.Cog):
         if message_excerpt:
             quoted_excerpt = "\n".join("> " + line for line in message_excerpt.splitlines())
             intake_lines.append("Snippet:\n" + quoted_excerpt)
-        intake_lines.append("Use the button only when staff want Elrond to run diagnosis.")
+        intake_lines.append("Use the button to post a Hermes Elrond diagnosis request into this backend thread. Mention Elrond here if it does not auto-start.")
         should_post_backend_notice = backend_thread_created or force or channel.id not in tracked_notices
         if should_post_backend_notice:
             await backend_thread.send(
