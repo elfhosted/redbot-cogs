@@ -1,7 +1,10 @@
 import asyncio
 import logging
+import os
 import re
-from typing import Optional, Tuple
+import time
+import urllib.parse
+from typing import Any, Optional, Tuple
 
 import aiohttp
 import discord
@@ -35,6 +38,8 @@ DEFAULT_INTAKE_TEMPLATE = """🧾 **Ticket Intake**
 
 📝 **Report**
 {excerpt_block}
+
+{support_context_block}
 
 {staff_notes_block}
 
@@ -497,6 +502,10 @@ class ElrondRadar(commands.Cog):
             ticket_username or thread_username,
         )
 
+        support_context = await self._build_support_context(
+            username=ticket_username or thread_username,
+            discord_id=str(intake_member.id) if intake_member is not None else "",
+        )
         preview = await self._render_intake(
             ticket_channel=channel,
             source_url=ticket_url,
@@ -505,6 +514,7 @@ class ElrondRadar(commands.Cog):
             account=ticket_username or thread_username,
             excerpt=message_excerpt,
             user_notes=user_notes,
+            support_context=support_context,
         )
         metadata = [
             "LLM-free intake preview; no thread created, no webhook called, no model used.",
@@ -936,10 +946,276 @@ class ElrondRadar(commands.Cog):
             return "> not provided"
         return "\n".join("> " + line for line in text.splitlines())
 
-    async def _render_intake(self, *, ticket_channel, source_url: str, author: str, tenant_member, account: str, excerpt: str, user_notes: str) -> str:
+    def _md_value(self, value: Any, fallback: str = "unknown") -> str:
+        text = str(value or "").strip()
+        return text if text else fallback
+
+    def _truncate_inline(self, value: Any, limit: int = 700) -> str:
+        text = " ".join(str(value or "").split())
+        return text[: limit - 1].rstrip() + "…" if len(text) > limit else text
+
+    def _code_block(self, value: str, limit: int = 1400, language: str = "text") -> list[str]:
+        text = str(value or "").strip().replace("```", "`\u200b``")
+        if len(text) > limit:
+            text = text[: limit - 1].rstrip() + "…"
+        return ["```" + language, text or "(no output)", "```"]
+
+    def _store_links(self, user_id: Any) -> str:
+        clean = str(user_id or "").strip()
+        if not clean:
+            return "`unknown`"
+        enc = urllib.parse.quote(clean)
+        return (
+            f"[user](<https://store.elfhosted.com/wp-admin/user-edit.php?user_id={enc}>) / "
+            f"[subscriptions](<https://store.elfhosted.com/wp-admin/admin.php?page=wc-orders--shop_subscription&_customer_user={enc}&status=all>) / "
+            f"[orders](<https://store.elfhosted.com/wp-admin/admin.php?page=wc-orders&_customer_user={enc}&status=all>)"
+        )
+
+    def _admin_post_link(self, kind: str, item_id: Any, label: str) -> str:
+        clean = str(item_id or "").strip()
+        safe = str(label or "").replace("[", "").replace("]", "").strip() or (kind + " #" + clean if clean else kind)
+        if not clean:
+            return safe
+        return "[" + safe + "](<https://store.elfhosted.com/wp-admin/post.php?post=" + urllib.parse.quote(clean) + "&action=edit>)"
+
+    def _subscription_items(self, sub: dict[str, Any]) -> str:
+        items = sub.get("items") if isinstance(sub, dict) else []
+        if not isinstance(items, list):
+            return "`no items`"
+        names = [str(item.get("name") or item.get("sku") or "").strip() for item in items if isinstance(item, dict)]
+        names = [name for name in names if name]
+        return ", ".join("`" + name.replace("`", "'") + "`" for name in names) or "`no items`"
+
+    def _format_subscriptions(self, subs: Any) -> list[str]:
+        visible = []
+        if isinstance(subs, list):
+            visible = [sub for sub in subs if isinstance(sub, dict) and str(sub.get("status") or "").lower() in {"active", "pending-cancel"}]
+        if not visible:
+            return ["- No active or pending-cancel subscriptions found"]
+        lines = []
+        for sub in visible[:8]:
+            status = str(sub.get("status") or "unknown").replace("-", " ")
+            raw_date = sub.get("endDate") if status == "pending cancel" else sub.get("nextPayment")
+            date = str(raw_date or sub.get("nextPayment") or sub.get("endDate") or "")[:10]
+            date_part = (", ends `" + date + "`") if status == "pending cancel" and date else ((", renews `" + date + "`") if date else "")
+            first_item = "Subscription #" + str(sub.get("id"))
+            if isinstance(sub.get("items"), list) and sub["items"]:
+                first_item = str(sub["items"][0].get("name") or sub["items"][0].get("sku") or first_item)
+            lines.append("- " + self._admin_post_link("Subscription", sub.get("id"), first_item) + f" — `{status}`" + date_part + " — " + self._subscription_items(sub))
+        return lines
+
+    def _format_orders(self, orders: Any) -> list[str]:
+        visible = orders if isinstance(orders, list) else []
+        if not visible:
+            return ["- No recent orders found"]
+        lines = []
+        for order in visible[:5]:
+            if not isinstance(order, dict):
+                continue
+            order_id = order.get("id") or order.get("orderId")
+            status = str(order.get("status") or "unknown").replace("-", " ")
+            date = str(order.get("dateCreated") or order.get("date") or "")[:10]
+            total = str(order.get("total") or order.get("orderTotal") or "").strip()
+            label = "Order #" + str(order_id or "?")
+            tail = ""
+            if date:
+                tail += " — `" + date + "`"
+            if total:
+                tail += " — " + total
+            lines.append("- " + self._admin_post_link("Order", order_id, label) + " — `" + status + "`" + tail)
+        return lines or ["- No recent orders found"]
+
+    def _extract_helm_metadata(self, output: str) -> tuple[list[str], int | None]:
+        text = str(output or "")
+        start = text.find("{")
+        end = text.rfind("}")
+        if start < 0 or end <= start:
+            return [], None
+        try:
+            import json
+            values = json.loads(text[start : end + 1])
+        except Exception:
+            return [], None
+        skip = {"global", "storageclass", "volsync", "traefikforwardauth", "dns_domain", "userid"}
+        apps = []
+        if isinstance(values, dict):
+            for key, val in values.items():
+                if str(key).lower() in skip:
+                    continue
+                if isinstance(val, dict) and val.get("enabled") is True:
+                    apps.append(str(key))
+        user_id = None
+        try:
+            parsed = int(values.get("userId")) if isinstance(values, dict) and values.get("userId") else 0
+            user_id = parsed if parsed > 0 else None
+        except Exception:
+            user_id = None
+        return sorted(apps), user_id
+
+    async def _support_http_json(self, base_url: str, path: str, secret: str, params: dict[str, str] | None = None, *, timeout: int = 15) -> dict[str, Any]:
+        query = "?" + urllib.parse.urlencode(params) if params else ""
+        url = base_url.rstrip("/") + path + query
+        headers = {"Accept": "application/json", "Authorization": "Bearer " + secret}
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                text = await response.text()
+                if response.status >= 300:
+                    raise RuntimeError(f"HTTP {response.status} from {path}: {text[:200]}")
+                return await response.json(content_type=None) if text.strip() else {}
+
+    def _elrond_base_url(self, cluster: str) -> str:
+        suffix = str(cluster or "").upper().replace(".", "_").replace("-", "_")
+        defaults = {
+            "elfhosted.com": "http://elrond.elrond.svc.cluster.local:8080",
+            "elfhosted.cafe": "http://elrond-elfhosted-cafe.elrond.svc.cluster.local:8080",
+            "elfhosted.cc": "http://elrond-elfhosted-cc.elrond.svc.cluster.local:8080",
+            "elfhosted.coffee": "http://elrond-elfhosted-coffee.elrond.svc.cluster.local:8080",
+            "elfhosted.party": "http://elrond-elfhosted-party.elrond.svc.cluster.local:8080",
+            "elfhosted.surf": "http://elrond-elfhosted-surf.elrond.svc.cluster.local:8080",
+            "elfhosted.wine": "http://elrond-elfhosted-wine.elrond.svc.cluster.local:8080",
+        }
+        return (os.getenv("ELROND_MCP_URL_" + suffix) or os.getenv("ELROND_BASE_URL_" + suffix) or defaults.get(cluster) or os.getenv("ELROND_BASE_URL") or defaults["elfhosted.com"]).rstrip("/")
+
+    async def _run_read(self, cluster: str, operation: str, namespace: str, params: dict[str, Any] | None = None) -> str:
+        base_url = self._elrond_base_url(cluster)
+        secret = os.getenv("ELROND_MCP_SECRET_" + str(cluster or "").upper().replace(".", "_").replace("-", "_")) or os.getenv("ELROND_SECRET") or os.getenv("ELROND_MCP_SECRET") or ""
+        if not secret:
+            raise RuntimeError("ELROND_SECRET is not configured")
+        payload = {"operation": operation, "namespace": namespace, "params": params or {}, "requested_by": "redbot:elrondradar", "reason": "LLM-free support ticket intake"}
+        headers = {"Accept": "application/json", "Authorization": "Bearer " + secret}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(base_url.rstrip("/") + "/run", json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as response:
+                text = await response.text()
+                if response.status >= 300:
+                    raise RuntimeError(f"HTTP {response.status} from Elrond {operation}: {text[:200]}")
+                data = await response.json(content_type=None) if text.strip() else {}
+        result = data.get("data") if isinstance(data, dict) else {}
+        if isinstance(result, dict):
+            return str(result.get("output") or result.get("message") or result.get("error") or result)
+        return str(result or "")
+
+    async def _build_support_context(self, *, username: str, discord_id: str = "") -> str:
+        warnings = []
+        resolved_username = self._normalize_username(username)
+        user_id = None
+        profile = None
+        tenant = None
+        gitops_url = os.getenv("ELROND_GITOPS_URL", "http://elrond-gitops.openclaw:8080")
+        woo_url = os.getenv("ELROND_WOO_URL", "http://elrond-woo.openclaw:8080")
+        woo_secret = os.getenv("ELROND_WOO_SECRET") or os.getenv("WOO_SECRET") or ""
+        gitops_secret = os.getenv("ELROND_GITOPS_SECRET") or os.getenv("GITOPS_SECRET") or ""
+
+        if resolved_username and woo_secret:
+            try:
+                search = await self._support_http_json(woo_url, "/customer/search", woo_secret, {"query": resolved_username})
+                customers = search.get("customers") if isinstance(search, dict) else []
+                customers = customers if isinstance(customers, list) else []
+                exact = next((c for c in customers if self._normalize_username(c.get("username")) == resolved_username), None)
+                match = exact or (customers[0] if len(customers) == 1 else None)
+                if isinstance(match, dict) and match.get("id"):
+                    user_id = int(match.get("id"))
+                    resolved_username = self._normalize_username(match.get("username")) or resolved_username
+            except Exception as exc:
+                warnings.append("Woo customer search failed: " + str(exc))
+        elif not woo_secret:
+            warnings.append("Woo lookup secret is not configured")
+
+        if user_id and woo_secret:
+            try:
+                profile = await self._support_http_json(woo_url, "/customer/profile", woo_secret, {"customer_id": str(user_id)})
+                resolved_username = self._normalize_username(profile.get("username")) or resolved_username
+            except Exception as exc:
+                warnings.append("Woo profile lookup failed: " + str(exc))
+
+        if resolved_username and gitops_secret:
+            try:
+                tenant = await self._support_http_json(gitops_url, "/tenant/lookup", gitops_secret, {"username": resolved_username})
+                if isinstance(tenant, dict) and tenant.get("userId") and not user_id:
+                    user_id = int(tenant.get("userId"))
+            except Exception as exc:
+                warnings.append("GitOps lookup failed: " + str(exc))
+        elif not gitops_secret:
+            warnings.append("GitOps lookup secret is not configured")
+
+        cluster_name = tenant.get("cluster") if isinstance(tenant, dict) else ""
+        namespace = "aa-" + resolved_username if resolved_username else ""
+        apps = tenant.get("apps") if isinstance(tenant, dict) and isinstance(tenant.get("apps"), list) else []
+        pods = ""
+        top_pods = ""
+        if cluster_name and namespace:
+            try:
+                hr_values = await self._run_read(cluster_name, "get_helmrelease_values", namespace, {"name": resolved_username})
+                metadata_apps, metadata_user_id = self._extract_helm_metadata(hr_values)
+                if not apps and metadata_apps:
+                    apps = metadata_apps
+                if not user_id and metadata_user_id:
+                    user_id = metadata_user_id
+            except Exception as exc:
+                warnings.append("HelmRelease values lookup failed: " + str(exc))
+            try:
+                pods = await self._run_read(cluster_name, "list_pods", namespace, {})
+            except Exception as exc:
+                warnings.append("Pod snapshot failed: " + str(exc))
+            try:
+                top_pods = await self._run_read(cluster_name, "top_pods", namespace, {"containers": True})
+            except Exception as exc:
+                warnings.append("Pod usage lookup failed: " + str(exc))
+        elif namespace:
+            warnings.append("Cluster lookup did not resolve for `" + namespace + "`; skipped Kubernetes snapshots")
+        else:
+            warnings.append("Tenant identity did not resolve; skipped GitOps, billing, and Kubernetes snapshots")
+
+        subscriptions = []
+        orders = []
+        if user_id and woo_secret:
+            try:
+                sub_data = await self._support_http_json(woo_url, "/customer/subscriptions", woo_secret, {"customer_id": str(user_id), "active_only": "true"})
+                subscriptions = sub_data.get("subscriptions") if isinstance(sub_data, dict) and isinstance(sub_data.get("subscriptions"), list) else []
+            except Exception as exc:
+                warnings.append("Subscription lookup failed: " + str(exc))
+            try:
+                order_data = await self._support_http_json(woo_url, "/customer/orders", woo_secret, {"customer_id": str(user_id), "limit": "5"})
+                orders = order_data.get("orders") if isinstance(order_data, dict) and isinstance(order_data.get("orders"), list) else []
+            except Exception as exc:
+                warnings.append("Order lookup failed: " + str(exc))
+
+        lines = [
+            "📦 **Support Context**",
+            "Generated: " + time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
+            "",
+            "👤 **Tenant Details**",
+            "- ElfHosted username: `" + self._md_value(resolved_username) + "`",
+            "- Discord: " + ("<@" + discord_id + ">" if discord_id else "`unknown`"),
+            "- Datacenter: `" + self._md_value(cluster_name) + "`",
+            "- Store: " + self._store_links(user_id or (tenant.get("userId") if isinstance(tenant, dict) else None)),
+            "",
+            "💳 **Subscriptions**",
+            *self._format_subscriptions(subscriptions),
+            "",
+            "🧾 **Recent Orders**",
+            *self._format_orders(orders),
+            "",
+            "📦 **Apps Detected**",
+            ", ".join("`" + str(app).lower().replace("`", "'") + "`" for app in apps) if apps else "`unknown`",
+        ]
+        if profile:
+            lines.extend(["", "👥 **User Details**"])
+            for label, key in (("Email", "email"), ("Registered", "dateCreated"), ("Orders", "ordersCount"), ("Total spent", "totalSpent")):
+                if profile.get(key) is not None:
+                    lines.append("- " + label + ": `" + str(profile.get(key)) + "`")
+        if top_pods:
+            lines.extend(["", "📊 **Pod Usage**", *self._code_block(top_pods, 1100)])
+        if pods:
+            lines.extend(["", "📋 **Pods**", *self._code_block(pods, 1200)])
+        if warnings:
+            lines.extend(["", "⚠️ **Lookup Warnings**", *("- " + self._truncate_inline(warning, 220) for warning in warnings)])
+        return "\n".join(lines)
+
+    async def _render_intake(self, *, ticket_channel, source_url: str, author: str, tenant_member, account: str, excerpt: str, user_notes: str, support_context: str = "") -> str:
         template = await self.config.intake_template() or DEFAULT_INTAKE_TEMPLATE
         tenant_discord = tenant_member.mention if tenant_member is not None else "`unknown`"
         staff_notes_block = user_notes or "🗒️ **Staff Notes**\nNo stored staff notes found."
+        support_context_block = support_context.strip() or "📦 **Support Context**\n- Not resolved yet."
         values = {
             "ticket_channel": getattr(ticket_channel, "mention", f"<#{getattr(ticket_channel, 'id', '')}>"),
             "ticket_channel_name": getattr(ticket_channel, "name", str(getattr(ticket_channel, "id", "unknown"))),
@@ -952,7 +1228,13 @@ class ElrondRadar(commands.Cog):
             "excerpt_block": self._format_excerpt_block(excerpt),
             "staff_notes": user_notes or "",
             "staff_notes_block": staff_notes_block,
+            "support_context": support_context or "",
+            "support_context_block": support_context_block,
         }
+        if "support_context" not in template and "support_context_block" not in template:
+            marker = "\n\n{staff_notes_block}"
+            if marker in template:
+                template = template.replace(marker, "\n\n{support_context_block}" + marker, 1)
         try:
             return template.format(**values)
         except Exception as exc:
@@ -1328,6 +1610,10 @@ class ElrondRadar(commands.Cog):
             str(intake_member.id) if intake_member is not None else (str(first_message.author.id) if first_message is not None else ""),
             ticket_username or thread_username,
         )
+        support_context = await self._build_support_context(
+            username=ticket_username or thread_username,
+            discord_id=str(intake_member.id) if intake_member is not None else "",
+        )
         intake_text = await self._render_intake(
             ticket_channel=channel,
             source_url=ticket_url,
@@ -1336,6 +1622,7 @@ class ElrondRadar(commands.Cog):
             account=ticket_username or thread_username,
             excerpt=message_excerpt,
             user_notes=user_notes,
+            support_context=support_context,
         )
         intake_view = DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, 0, source_message_id, ticket_username)
         backend_thread, backend_thread_created, initial_notice_posted = await self._create_backend_thread(
