@@ -106,7 +106,7 @@ class ElrondRadar(commands.Cog):
         self.config = Config.get_conf(self, identifier=2026051701, force_registration=True)
         self.config.register_global(
             enabled=False,
-            endpoint_url="http://openclaw.openclaw:18789/elrond/support-radar/reaction",
+            endpoint_url="",
             gateway_token="",
             guild_id=396055506072109067,
             allowed_user_ids=DEFAULT_ALLOWED_USER_IDS,
