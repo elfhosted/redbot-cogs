@@ -419,6 +419,66 @@ class ElrondRadar(commands.Cog):
         ]
         await ctx.send("\n".join(lines)[:1900], allowed_mentions=discord.AllowedMentions.none())
 
+    @elrondradar.command(name="previewintake", aliases=["previewticket"])
+    async def previewintake(self, ctx, channel_id: int):
+        """Render the LLM-free backend intake text without posting or calling Elrond."""
+        if ctx.guild is None:
+            await ctx.send("Run this in the configured guild.")
+            return
+        if ctx.guild.id != await self.config.guild_id():
+            await ctx.send("This server is not the configured Elrond radar guild.")
+            return
+
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await ctx.guild.fetch_channel(channel_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException) as exc:
+                await ctx.send(f"Could not fetch ticket channel {channel_id}: {exc}")
+                return
+        if not hasattr(channel, "history"):
+            await ctx.send(f"Channel {channel_id} is not a readable text channel.")
+            return
+
+        tenant_member = await self._ticket_tenant_member(channel)
+        visible_members = await self._ticket_visible_members(channel)
+        first_message = await self._first_useful_channel_message(channel, tenant_member.id if tenant_member is not None else None)
+        ticket_username = self._ticket_username(first_message)
+        message_excerpt = self._message_excerpt(first_message)
+        intake_member = tenant_member or (visible_members[0] if visible_members else None)
+        thread_username = self._thread_username(channel, ticket_username, tenant_member)
+        source_message_id = first_message.id if first_message is not None else channel.id
+        ticket_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{ctx.guild.id}/{channel.id}"
+        user_notes = await self._format_user_notes_for_intake(
+            str(intake_member.id) if intake_member is not None else (str(first_message.author.id) if first_message is not None else ""),
+            ticket_username or thread_username,
+        )
+
+        intake_lines = [
+            "Ticket intake for " + channel.mention,
+            "Source: " + ticket_url,
+        ]
+        if first_message is not None:
+            intake_lines.append("Author: " + str(first_message.author))
+        if tenant_member is not None:
+            intake_lines.append("Tenant: " + str(tenant_member))
+        if ticket_username:
+            intake_lines.append("Account: " + ticket_username)
+        if message_excerpt:
+            quoted_excerpt = "\n".join("> " + line for line in message_excerpt.splitlines())
+            intake_lines.append("Snippet:\n" + quoted_excerpt)
+        if user_notes:
+            intake_lines.append("Staff notes:\n" + user_notes)
+        intake_lines.append("Use the button to post a Hermes Elrond diagnosis request into this backend thread. Mention Elrond here if it does not auto-start.")
+
+        preview = "\n\n".join(intake_lines)
+        metadata = [
+            "LLM-free intake preview; no thread created, no webhook called, no model used.",
+            f"Would use backend thread name: 🟡 {thread_username}",
+            f"Source message id: {source_message_id}",
+        ]
+        await ctx.send(("\n".join(metadata) + "\n\n" + preview)[:1900], allowed_mentions=discord.AllowedMentions.none())
+
     @elrondradar.command(name="test")
     async def test(self, ctx, channel_id: int, message_id: int, emoji: str = "👀"):
         """Send a synthetic radar event for a specific Discord message."""
