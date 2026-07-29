@@ -22,6 +22,26 @@ SUPPORTED_EMOJIS = {"🚨", "🐧", "🏎️", "🏎", "👀", "🛠️", "🛠"
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
 DEFAULT_ADDITIONAL_TICKET_CATEGORY_IDS = [1310419382169501767]
 DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
+DEFAULT_INTAKE_TEMPLATE = """🧾 **Ticket Intake**
+
+🎫 **Ticket**
+{ticket_channel}
+{source_url}
+
+👤 **Tenant**
+- Account: `{account}`
+- Discord: {tenant_discord}
+- Author: `{author}`
+
+📝 **Report**
+{excerpt_block}
+
+{staff_notes_block}
+
+🧠 **Next step**
+Use the button to post a Hermes Elrond diagnosis request into this backchannel topic. Mention Elrond here if it does not auto-start.
+
+_No LLM was used to generate this intake._"""
 USERNAME_RE = re.compile(r"(?:aa-)?[a-z0-9][a-z0-9-]{1,60}", re.IGNORECASE)
 USERNAME_STOPWORDS = {"account", "elfhosted", "username", "user", "none", "unknown", "not", "sure", "unsure", "na", "n/a"}
 
@@ -123,6 +143,7 @@ class ElrondRadar(commands.Cog):
             tracked_ticket_link_notice_ids=[],
             tracked_ticket_identity_resolved={},
             user_notes={},
+            intake_template=DEFAULT_INTAKE_TEMPLATE,
         )
         self._pending_ticket_intake_tasks = {}
 
@@ -208,8 +229,30 @@ class ElrondRadar(commands.Cog):
             f"- allowed users: {len(cfg.get('allowed_user_ids') or [])}\n"
             f"- allowed roles: {len(cfg.get('allowed_role_ids') or [])}\n"
             f"- tenant roles: {len(cfg.get('tenant_role_ids') or [])}\n"
-            f"- link instructions channel: {cfg.get('link_instructions_channel_id')}"
+            f"- link instructions channel: {cfg.get('link_instructions_channel_id')}\n"
+            f"- intake template: {len(cfg.get('intake_template') or '')} chars"
         )
+
+    @elrondradar.command(name="showintaketemplate")
+    async def showintaketemplate(self, ctx):
+        """Show the current backend intake template."""
+        template = await self.config.intake_template() or DEFAULT_INTAKE_TEMPLATE
+        await ctx.send(("Current Elrond intake template:\n```text\n" + template.replace("```", "`\u200b``") + "\n```")[:1900], allowed_mentions=discord.AllowedMentions.none())
+
+    @elrondradar.command(name="setintaketemplate")
+    async def setintaketemplate(self, ctx, *, template: str):
+        """Set the backend intake template. Use resetintaketemplate to restore default."""
+        if not template.strip():
+            await ctx.send("Template cannot be empty.")
+            return
+        await self.config.intake_template.set(template.strip())
+        await ctx.send("Elrond radar intake template updated.")
+
+    @elrondradar.command(name="resetintaketemplate")
+    async def resetintaketemplate(self, ctx):
+        """Reset the backend intake template to the default."""
+        await self.config.intake_template.set(DEFAULT_INTAKE_TEMPLATE)
+        await ctx.send("Elrond radar intake template reset to default.")
 
     @elrondradar.command(name="setticketcategory")
     async def setticketcategory(self, ctx, category_id: int):
@@ -454,24 +497,15 @@ class ElrondRadar(commands.Cog):
             ticket_username or thread_username,
         )
 
-        intake_lines = [
-            "Ticket intake for " + channel.mention,
-            "Source: " + ticket_url,
-        ]
-        if first_message is not None:
-            intake_lines.append("Author: " + str(first_message.author))
-        if tenant_member is not None:
-            intake_lines.append("Tenant: " + str(tenant_member))
-        if ticket_username:
-            intake_lines.append("Account: " + ticket_username)
-        if message_excerpt:
-            quoted_excerpt = "\n".join("> " + line for line in message_excerpt.splitlines())
-            intake_lines.append("Snippet:\n" + quoted_excerpt)
-        if user_notes:
-            intake_lines.append("Staff notes:\n" + user_notes)
-        intake_lines.append("Use the button to post a Hermes Elrond diagnosis request into this backend thread. Mention Elrond here if it does not auto-start.")
-
-        preview = "\n\n".join(intake_lines)
+        preview = await self._render_intake(
+            ticket_channel=channel,
+            source_url=ticket_url,
+            author=str(first_message.author) if first_message is not None else "unknown",
+            tenant_member=tenant_member,
+            account=ticket_username or thread_username,
+            excerpt=message_excerpt,
+            user_notes=user_notes,
+        )
         metadata = [
             "LLM-free intake preview; no thread created, no webhook called, no model used.",
             f"Would use backend thread name: 🟡 {thread_username}",
@@ -823,6 +857,8 @@ class ElrondRadar(commands.Cog):
         parent_id = getattr(channel, "parent_id", None)
         if parent_id == backend_channel_id or getattr(channel, "id", None) == backend_channel_id:
             username = self._normal_thread_name(getattr(channel, "name", ""))
+            if " · " in username:
+                username = username.split(" · ", 1)[0].strip()
             if username:
                 normalized = self._normalize_username(username)
                 return f"username:{normalized}", normalized
@@ -893,6 +929,66 @@ class ElrondRadar(commands.Cog):
         if clean_username:
             keys.append(f"username:{clean_username}")
         return await self._format_user_notes_for_keys(keys)
+
+    def _format_excerpt_block(self, excerpt: str) -> str:
+        text = str(excerpt or "").strip()
+        if not text:
+            return "> not provided"
+        return "\n".join("> " + line for line in text.splitlines())
+
+    async def _render_intake(self, *, ticket_channel, source_url: str, author: str, tenant_member, account: str, excerpt: str, user_notes: str) -> str:
+        template = await self.config.intake_template() or DEFAULT_INTAKE_TEMPLATE
+        tenant_discord = tenant_member.mention if tenant_member is not None else "`unknown`"
+        staff_notes_block = user_notes or "🗒️ **Staff Notes**\nNo stored staff notes found."
+        values = {
+            "ticket_channel": getattr(ticket_channel, "mention", f"<#{getattr(ticket_channel, 'id', '')}>"),
+            "ticket_channel_name": getattr(ticket_channel, "name", str(getattr(ticket_channel, "id", "unknown"))),
+            "ticket_channel_id": str(getattr(ticket_channel, "id", "")),
+            "source_url": source_url or "not provided",
+            "author": author or "unknown",
+            "tenant_discord": tenant_discord,
+            "account": account or "unknown",
+            "excerpt": excerpt or "not provided",
+            "excerpt_block": self._format_excerpt_block(excerpt),
+            "staff_notes": user_notes or "",
+            "staff_notes_block": staff_notes_block,
+        }
+        try:
+            return template.format(**values)
+        except Exception as exc:
+            log.warning("Elrond radar intake template render failed: %s", exc)
+            return DEFAULT_INTAKE_TEMPLATE.format(**values)
+
+    def _split_discord(self, content: str, max_len: int = 1800):
+        text = str(content or "").strip()
+        if not text:
+            return []
+        chunks = []
+        current = ""
+        for section in re.split(r"\n\n+", text):
+            candidate = current + "\n\n" + section if current else section
+            if len(candidate) <= max_len:
+                current = candidate
+                continue
+            if current:
+                chunks.append(current)
+                current = ""
+            while len(section) > max_len:
+                chunks.append(section[:max_len])
+                section = section[max_len:]
+            current = section
+        if current:
+            chunks.append(current)
+        return chunks
+
+    async def _send_backend_intake_notice(self, backend_thread, intake_text: str, view=None):
+        chunks = self._split_discord(intake_text)
+        for index, chunk in enumerate(chunks):
+            await backend_thread.send(
+                chunk,
+                view=view if index == 0 else None,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
 
     async def _fetch_message(self, payload: discord.RawReactionActionEvent) -> Optional[discord.Message]:
         channel = self.bot.get_channel(payload.channel_id)
@@ -1226,41 +1322,47 @@ class ElrondRadar(commands.Cog):
         intake_member = tenant_member or (visible_members[0] if visible_members else None)
         thread_username = self._thread_username(channel, ticket_username, tenant_member)
         channel_thread_name = self._thread_username(channel, "", None)
-        backend_thread, backend_thread_created = await self._create_backend_thread(channel, thread_username, aliases=[channel_thread_name])
-        if backend_thread is None:
-            log.warning("Elrond radar could not create backend thread for ticket channel %s", channel.id)
-            return False
-
         source_message_id = first_message.id if first_message is not None else channel.id
         ticket_url = first_message.jump_url if first_message is not None else f"https://discord.com/channels/{guild.id}/{channel.id}"
         user_notes = await self._format_user_notes_for_intake(
             str(intake_member.id) if intake_member is not None else (str(first_message.author.id) if first_message is not None else ""),
             ticket_username or thread_username,
         )
-        intake_lines = [
-            "Ticket intake for " + channel.mention,
-            "Source: " + ticket_url,
-        ]
-        if first_message is not None:
-            intake_lines.append("Author: " + str(first_message.author))
-        if tenant_member is not None:
-            intake_lines.append("Tenant: " + str(tenant_member))
-        if ticket_username:
-            intake_lines.append("Account: " + ticket_username)
-        if message_excerpt:
-            quoted_excerpt = "\n".join("> " + line for line in message_excerpt.splitlines())
-            intake_lines.append("Snippet:\n" + quoted_excerpt)
-        intake_lines.append("Use the button to post a Hermes Elrond diagnosis request into this backend thread. Mention Elrond here if it does not auto-start.")
-        should_post_backend_notice = backend_thread_created or force or channel.id not in tracked_notices
+        intake_text = await self._render_intake(
+            ticket_channel=channel,
+            source_url=ticket_url,
+            author=str(first_message.author) if first_message is not None else "unknown",
+            tenant_member=tenant_member,
+            account=ticket_username or thread_username,
+            excerpt=message_excerpt,
+            user_notes=user_notes,
+        )
+        intake_view = DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, 0, source_message_id, ticket_username)
+        backend_thread, backend_thread_created, initial_notice_posted = await self._create_backend_thread(
+            channel,
+            thread_username,
+            aliases=[channel_thread_name],
+            initial_content=intake_text,
+            initial_view=intake_view,
+        )
+        if backend_thread is None:
+            log.warning("Elrond radar could not create backend topic/thread for ticket channel %s", channel.id)
+            return False
+        intake_view = DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id, ticket_username)
+        should_post_backend_notice = (backend_thread_created and not initial_notice_posted) or force or channel.id not in tracked_notices
         if should_post_backend_notice:
+            await self._send_backend_intake_notice(backend_thread, intake_text, intake_view)
+            await self._append_tracked_ticket_id(self.config.tracked_ticket_backend_notice_ids, channel.id)
+            tracked_notices.add(channel.id)
+            log.info("Elrond radar posted backend ticket notice: channel=%s backend_thread=%s reused=%s", channel.id, backend_thread.id, not backend_thread_created)
+        elif backend_thread_created and initial_notice_posted:
             await backend_thread.send(
-                "\n\n".join(intake_lines),
-                view=DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id, ticket_username),
+                "Hermes Elrond diagnosis/action is available from this topic when staff are ready.",
+                view=intake_view,
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             await self._append_tracked_ticket_id(self.config.tracked_ticket_backend_notice_ids, channel.id)
             tracked_notices.add(channel.id)
-            log.info("Elrond radar posted backend ticket notice: channel=%s backend_thread=%s reused=%s", channel.id, backend_thread.id, not backend_thread_created)
         if await self.config.announce_ticket_link() and channel.id not in tracked_backend_links:
             try:
                 await channel.send(
@@ -1474,14 +1576,16 @@ class ElrondRadar(commands.Cog):
                 return None
         return backend_channel
 
-    async def _create_backend_thread(self, ticket_channel, username: str, aliases=None):
+    async def _create_backend_thread(self, ticket_channel, username: str, aliases=None, initial_content: str = "", initial_view=None):
         backend_channel = await self._backend_channel(ticket_channel)
         if backend_channel is None or not hasattr(backend_channel, "create_thread"):
-            return None, False
+            return None, False, False
 
         raw_name = username or getattr(ticket_channel, "name", str(ticket_channel.id))
-        thread_name = ("🟡 " + raw_name)[:90]
-        lookup_names = [raw_name, *(aliases or [])]
+        ticket_label = str(getattr(ticket_channel, "name", ticket_channel.id) or ticket_channel.id)
+        unique_name = f"{raw_name} · {ticket_label} · {getattr(ticket_channel, 'id', '')}"
+        thread_name = ("🟡 " + unique_name)[:90]
+        lookup_names = [unique_name, thread_name, *(aliases or [])]
         existing = None
         for lookup_name in lookup_names:
             existing = await self._find_backend_thread(backend_channel, lookup_name)
@@ -1489,13 +1593,32 @@ class ElrondRadar(commands.Cog):
                 break
         if existing is not None:
             try:
-                await existing.edit(name=thread_name, archived=False, locked=False, reason="Elrond support ticket intake reopened")
+                await existing.edit(archived=False, locked=False, reason="Elrond support ticket intake reopened")
             except (discord.Forbidden, discord.HTTPException):
                 try:
-                    await existing.edit(name=thread_name, reason="Elrond support ticket intake reopened")
+                    await existing.edit(reason="Elrond support ticket intake reopened")
                 except (discord.Forbidden, discord.HTTPException):
                     pass
-            return existing, False
+            return existing, False, False
+
+        is_forum = getattr(backend_channel, "type", None) == discord.ChannelType.forum or backend_channel.__class__.__name__.lower().endswith("forumchannel")
+        if is_forum:
+            chunks = self._split_discord(initial_content or "Ticket intake pending.")
+            try:
+                created = await backend_channel.create_thread(
+                    name=thread_name,
+                    content=chunks[0] if chunks else "Ticket intake pending.",
+                    allowed_mentions=discord.AllowedMentions.none(),
+                    reason="Elrond support ticket intake",
+                )
+                thread = getattr(created, "thread", created)
+                for chunk in chunks[1:]:
+                    await thread.send(chunk, allowed_mentions=discord.AllowedMentions.none())
+                return thread, True, True
+            except TypeError:
+                pass
+            except (discord.Forbidden, discord.HTTPException):
+                return None, False, False
 
         try:
             thread = await backend_channel.create_thread(
@@ -1503,17 +1626,17 @@ class ElrondRadar(commands.Cog):
                 type=discord.ChannelType.public_thread,
                 reason="Elrond support ticket intake",
             )
-            return thread, True
-        except (discord.Forbidden, discord.HTTPException):
+            return thread, True, False
+        except (discord.Forbidden, discord.HTTPException, TypeError):
             try:
                 thread = await backend_channel.create_thread(
                     name=thread_name,
                     type=discord.ChannelType.private_thread,
                     reason="Elrond support ticket intake",
                 )
-                return thread, True
-            except (discord.Forbidden, discord.HTTPException):
-                return None, False
+                return thread, True, False
+            except (discord.Forbidden, discord.HTTPException, TypeError):
+                return None, False, False
 
     async def _find_backend_thread(self, backend_channel, username: str):
         wanted = self._normal_thread_name(username)
