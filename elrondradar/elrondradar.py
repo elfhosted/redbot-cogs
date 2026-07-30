@@ -35,7 +35,6 @@ DEFAULT_INTAKE_TEMPLATE = """🧾 **Ticket Intake**
 👤 **Tenant**
 - Account: `{account}`
 - Discord: {tenant_discord}
-- Author: `{author}`
 
 📝 **Report**
 {excerpt_block}
@@ -1355,7 +1354,18 @@ class ElrondRadar(commands.Cog):
 
     async def _render_intake(self, *, ticket_channel, source_url: str, author: str, tenant_member, account: str, excerpt: str, user_notes: str, support_context: str = "") -> str:
         template = await self.config.intake_template() or DEFAULT_INTAKE_TEMPLATE
-        tenant_discord = tenant_member.mention if tenant_member is not None else "`unknown`"
+        # Ticket messages are often authored by ElfHelpBot, not the tenant. Prefer the
+        # Discord ID resolved from Woo/support context when the member cannot be seen
+        # in the ticket channel, and suppress the low-signal Author field in default
+        # and older persisted templates.
+        template = template.replace("\n- Author: `{author}`", "").replace("\n- Author: {author}", "")
+        support_discord_match = re.search(r"- Discord:\s*<@!?(\d+)>", support_context or "")
+        if tenant_member is not None:
+            tenant_discord = tenant_member.mention
+        elif support_discord_match:
+            tenant_discord = "<@" + support_discord_match.group(1) + ">"
+        else:
+            tenant_discord = "`unknown`"
         staff_notes_block = user_notes or "🗒️ **Staff Notes**\nNo stored staff notes found."
         support_context_block = support_context.strip() or "📦 **Support Context**\n- Not resolved yet."
         values = {
