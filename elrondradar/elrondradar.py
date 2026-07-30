@@ -35,7 +35,6 @@ DEFAULT_INTAKE_TEMPLATE = """🧾 **Ticket Intake**
 👤 **Tenant**
 - Account: `{account}`
 - Discord: {tenant_discord}
-- Author: `{author}`
 
 📝 **Report**
 {excerpt_block}
@@ -45,9 +44,7 @@ DEFAULT_INTAKE_TEMPLATE = """🧾 **Ticket Intake**
 {staff_notes_block}
 
 🧠 **Next step**
-Use the button to post a Hermes Elrond diagnosis request into this backchannel topic. Mention Elrond here if it does not auto-start.
-
-_No LLM was used to generate this intake._"""
+Use the button to ask Elrond to diagnose this ticket."""
 USERNAME_RE = re.compile(r"(?:aa-)?[a-z0-9][a-z0-9-]{1,60}", re.IGNORECASE)
 USERNAME_STOPWORDS = {"account", "elfhosted", "username", "user", "none", "unknown", "not", "sure", "unsure", "na", "n/a"}
 
@@ -91,7 +88,7 @@ class DiagnosisRequestModal(discord.ui.Modal):
         }
         await self.cog._post_legacy_diagnosis_request_notice(data)
         await interaction.response.send_message(
-            "Legacy OpenClaw diagnosis is disabled. I posted a Hermes Elrond diagnosis request into the backend thread; mention Elrond there if it does not auto-start.",
+            "Posted an Elrond diagnosis request into the backend thread.",
             ephemeral=True,
         )
 
@@ -1253,6 +1250,10 @@ class ElrondRadar(commands.Cog):
                 if isinstance(match, dict) and match.get("id"):
                     user_id = int(match.get("id"))
                     resolved_username = self._normalize_username(match.get("username")) or resolved_username
+                elif not customers:
+                    warnings.append("Woo customer search found no user for `" + resolved_username + "`")
+                else:
+                    warnings.append("Woo customer search returned multiple non-exact users for `" + resolved_username + "`; user details skipped")
             except Exception as exc:
                 warnings.append("Woo customer search failed: " + str(exc))
         elif not woo_secret:
@@ -1353,7 +1354,18 @@ class ElrondRadar(commands.Cog):
 
     async def _render_intake(self, *, ticket_channel, source_url: str, author: str, tenant_member, account: str, excerpt: str, user_notes: str, support_context: str = "") -> str:
         template = await self.config.intake_template() or DEFAULT_INTAKE_TEMPLATE
-        tenant_discord = tenant_member.mention if tenant_member is not None else "`unknown`"
+        # Ticket messages are often authored by ElfHelpBot, not the tenant. Prefer the
+        # Discord ID resolved from Woo/support context when the member cannot be seen
+        # in the ticket channel, and suppress the low-signal Author field in default
+        # and older persisted templates.
+        template = template.replace("\n- Author: `{author}`", "").replace("\n- Author: {author}", "")
+        support_discord_match = re.search(r"- Discord:\s*<@!?(\d+)>", support_context or "")
+        if tenant_member is not None:
+            tenant_discord = tenant_member.mention
+        elif support_discord_match:
+            tenant_discord = "<@" + support_discord_match.group(1) + ">"
+        else:
+            tenant_discord = "`unknown`"
         staff_notes_block = user_notes or "🗒️ **Staff Notes**\nNo stored staff notes found."
         support_context_block = support_context.strip() or "📦 **Support Context**\n- Not resolved yet."
         values = {
@@ -1478,7 +1490,9 @@ class ElrondRadar(commands.Cog):
         focus = str(data.get("message_content") or "").strip()
         ticket_url = str(data.get("message_url") or "").strip()
         staff = str(data.get("staff_display_name") or data.get("staff_discord_id") or "staff").strip()
+        elrond_user_id = "1480732802541424922"
         lines = [
+            "<@" + elrond_user_id + "> diagnose this intake ticket.",
             "🧠 Hermes Elrond diagnosis requested by " + staff + ".",
         ]
         if tenant:
@@ -1487,8 +1501,11 @@ class ElrondRadar(commands.Cog):
             lines.append("Ticket: " + ticket_url)
         if focus:
             lines.append("Focus:\n" + "\n".join("> " + line for line in focus.splitlines()))
-        lines.append("Mention Elrond in this thread to run the Hermes diagnosis/action flow. The retired OpenClaw endpoint was not called.")
-        await channel.send("\n\n".join(lines), allowed_mentions=discord.AllowedMentions.none())
+        lines.append("Elrond should start from this mention; if not, staff can mention him again in this topic.")
+        await channel.send(
+            "\n\n".join(lines),
+            allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False),
+        )
 
     async def _post_to_elrond(self, data: dict) -> Tuple[Optional[int], str]:
         endpoint_url = (await self.config.endpoint_url()).strip()
