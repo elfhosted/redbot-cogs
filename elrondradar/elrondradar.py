@@ -24,7 +24,8 @@ DEFAULT_LINK_INSTRUCTIONS_CHANNEL_ID = 1392004498611900476
 SUPPORTED_EMOJIS = {"🚨", "🐧", "🏎️", "🏎", "👀", "🛠️", "🛠", "⏳", "⌛", "✅", "📦", "🔁", "🔄"}
 DEFAULT_TICKET_CATEGORY_ID = 1281426693906759730
 DEFAULT_ADDITIONAL_TICKET_CATEGORY_IDS = [1310419382169501767]
-DEFAULT_BACKEND_CHANNEL_ID = 1480735317089587251
+LEGACY_BACKEND_CHANNEL_ID = 1480735317089587251
+DEFAULT_BACKEND_CHANNEL_ID = 1532180274119573617
 DEFAULT_INTAKE_TEMPLATE = """🧾 **Ticket Intake**
 
 🎫 **Ticket**
@@ -147,10 +148,21 @@ class ElrondRadar(commands.Cog):
             tracked_ticket_backend_link_notice_ids=[],
             tracked_ticket_link_notice_ids=[],
             tracked_ticket_identity_resolved={},
+            tracked_ticket_backend_thread_ids={},
+            tracked_ticket_user_history={},
             user_notes={},
             intake_template=DEFAULT_INTAKE_TEMPLATE,
         )
         self._pending_ticket_intake_tasks = {}
+
+    async def cog_load(self):
+        # Migrate existing installs from the old text backchannel to the new staff-only forum.
+        try:
+            if await self.config.backend_channel_id() == LEGACY_BACKEND_CHANNEL_ID:
+                await self.config.backend_channel_id.set(DEFAULT_BACKEND_CHANNEL_ID)
+                log.info("Elrond radar backend channel migrated to forum channel %s", DEFAULT_BACKEND_CHANNEL_ID)
+        except Exception:
+            log.exception("Elrond radar could not migrate backend forum channel")
 
     def cog_unload(self):
         for task in self._pending_ticket_intake_tasks.values():
@@ -506,6 +518,9 @@ class ElrondRadar(commands.Cog):
             username=ticket_username or thread_username,
             discord_id=str(intake_member.id) if intake_member is not None else "",
         )
+        previous_intakes = await self._format_previous_intakes(ticket_username or thread_username, exclude_ticket_id=channel.id)
+        if previous_intakes:
+            support_context = support_context.rstrip() + "\n\n" + previous_intakes
         preview = await self._render_intake(
             ticket_channel=channel,
             source_url=ticket_url,
@@ -1397,19 +1412,31 @@ class ElrondRadar(commands.Cog):
         self._schedule_ticket_channel_intake(getattr(channel, "id", 0))
 
     @commands.Cog.listener()
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
+        try:
+            if await self._was_tracked_ticket_channel(channel):
+                await self._close_backend_thread_for_ticket(channel, reason="Original ticket channel was deleted")
+        except Exception:
+            log.exception("Elrond radar could not close backend topic for deleted ticket %s", getattr(channel, "id", "unknown"))
+
+    @commands.Cog.listener()
     async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel):
         try:
             ticket_category_ids = set(await self._ticket_category_ids())
         except Exception:
             log.exception("Elrond radar could not read ticket category for channel update")
             return
-        if getattr(after, "category_id", None) in ticket_category_ids and getattr(before, "category_id", None) not in ticket_category_ids:
+        before_is_ticket = getattr(before, "category_id", None) in ticket_category_ids
+        after_is_ticket = getattr(after, "category_id", None) in ticket_category_ids
+        if after_is_ticket and not before_is_ticket:
             log.info(
                 "Elrond radar saw channel move into ticket category: channel=%s category=%s",
                 getattr(after, "id", "unknown"),
                 getattr(after, "category_id", None),
             )
             self._schedule_ticket_channel_intake(getattr(after, "id", 0))
+        elif before_is_ticket and not after_is_ticket and await self._was_tracked_ticket_channel(before):
+            await self._close_backend_thread_for_ticket(before, reason="Original ticket channel left the ticket category")
 
     @commands.Cog.listener()
     async def on_member_update(self, before, after):
@@ -1618,6 +1645,9 @@ class ElrondRadar(commands.Cog):
             username=ticket_username or thread_username,
             discord_id=str(intake_member.id) if intake_member is not None else "",
         )
+        previous_intakes = await self._format_previous_intakes(ticket_username or thread_username, exclude_ticket_id=channel.id)
+        if previous_intakes:
+            support_context = support_context.rstrip() + "\n\n" + previous_intakes
         intake_text = await self._render_intake(
             ticket_channel=channel,
             source_url=ticket_url,
@@ -1691,10 +1721,120 @@ class ElrondRadar(commands.Cog):
             tracked_identity[tracked_key] = identity_resolved
             tracked_identity = {str(item): tracked_identity.get(str(item), True) for item in tracked_ids}
             await self.config.tracked_ticket_identity_resolved.set(tracked_identity)
+            await self._record_backend_thread(channel, ticket_username or thread_username, backend_thread)
             log.info("Elrond radar ticket intake completed: channel=%s backend_thread=%s", channel.id, backend_thread.id)
             return True
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
         return False
+
+    async def _was_tracked_ticket_channel(self, channel) -> bool:
+        if channel is None:
+            return False
+        tracked = set(await self.config.tracked_ticket_channel_ids() or [])
+        mapping = await self.config.tracked_ticket_backend_thread_ids() or {}
+        return getattr(channel, "id", None) in tracked or str(getattr(channel, "id", "")) in mapping
+
+    def _history_key(self, username: str) -> str:
+        return self._normalize_username(username) or str(username or "").strip().lower()
+
+    async def _format_previous_intakes(self, username: str, exclude_ticket_id: int = 0) -> str:
+        key = self._history_key(username)
+        if not key:
+            return ""
+        history = await self.config.tracked_ticket_user_history() or {}
+        entries = [item for item in history.get(key, []) if str(item.get("ticket_channel_id")) != str(exclude_ticket_id)]
+        entries = entries[-5:]
+        if not entries:
+            return ""
+        lines = ["🧵 **Previous Intakes**"]
+        for item in reversed(entries):
+            title = str(item.get("ticket_name") or item.get("ticket_channel_id") or "ticket")
+            created = str(item.get("created_at") or "unknown")[:16].replace("T", " ")
+            url = item.get("backend_thread_url") or item.get("ticket_url") or ""
+            status = "closed" if item.get("closed_at") else "open"
+            if url:
+                lines.append(f"- {created} — `{title}` — {url} — `{status}`")
+            else:
+                lines.append(f"- {created} — `{title}` — `{status}`")
+        return "\n".join(lines)
+
+    async def _record_backend_thread(self, ticket_channel, username: str, backend_thread):
+        ticket_id = str(getattr(ticket_channel, "id", ""))
+        if not ticket_id or backend_thread is None:
+            return
+        key = self._history_key(username) or self._thread_username(ticket_channel, "", None)
+        now = discord.utils.utcnow().isoformat()
+        entry = {
+            "ticket_channel_id": ticket_id,
+            "ticket_name": getattr(ticket_channel, "name", ticket_id),
+            "ticket_url": f"https://discord.com/channels/{getattr(getattr(ticket_channel, 'guild', None), 'id', '')}/{ticket_id}",
+            "backend_thread_id": str(getattr(backend_thread, "id", "")),
+            "backend_thread_name": getattr(backend_thread, "name", ""),
+            "backend_thread_url": getattr(backend_thread, "jump_url", ""),
+            "username": key,
+            "created_at": now,
+        }
+        mapping = await self.config.tracked_ticket_backend_thread_ids() or {}
+        mapping[ticket_id] = entry
+        await self.config.tracked_ticket_backend_thread_ids.set(mapping)
+        history = await self.config.tracked_ticket_user_history() or {}
+        items = [item for item in history.get(key, []) if str(item.get("ticket_channel_id")) != ticket_id and str(item.get("backend_thread_id")) != entry["backend_thread_id"]]
+        items.append(entry)
+        history[key] = items[-20:]
+        await self.config.tracked_ticket_user_history.set(history)
+
+    async def _close_backend_thread_for_ticket(self, ticket_channel, reason: str):
+        ticket_id = str(getattr(ticket_channel, "id", ""))
+        if not ticket_id:
+            return False
+        mapping = await self.config.tracked_ticket_backend_thread_ids() or {}
+        entry = mapping.get(ticket_id)
+        if not entry:
+            return False
+        backend_thread_id = int(str(entry.get("backend_thread_id") or "0") or 0)
+        if not backend_thread_id:
+            return False
+        thread = self.bot.get_channel(backend_thread_id)
+        guild = getattr(ticket_channel, "guild", None)
+        if thread is None and guild is not None:
+            try:
+                thread = await guild.fetch_channel(backend_thread_id)
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                thread = None
+        if thread is None:
+            return False
+        closed_at = discord.utils.utcnow().isoformat()
+        try:
+            await thread.send(f"✅ Original ticket `{getattr(ticket_channel, 'name', ticket_id)}` closed/removed. Archiving this intake topic.\nReason: {reason}", allowed_mentions=discord.AllowedMentions.none())
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+        try:
+            name = getattr(thread, "name", "") or ""
+            new_name = ("✅ " + name.lstrip("🟡✅🟠🔴 "))[:90] if name else None
+            kwargs = {"archived": True, "locked": True, "reason": "Original support ticket closed"}
+            if new_name:
+                kwargs["name"] = new_name
+            await thread.edit(**kwargs)
+        except (discord.Forbidden, discord.HTTPException, TypeError):
+            try:
+                await thread.edit(archived=True, reason="Original support ticket closed")
+            except (discord.Forbidden, discord.HTTPException, TypeError):
+                pass
+        entry["closed_at"] = closed_at
+        entry["close_reason"] = reason
+        mapping[ticket_id] = entry
+        await self.config.tracked_ticket_backend_thread_ids.set(mapping)
+        key = entry.get("username") or self._history_key(getattr(ticket_channel, "name", ""))
+        history = await self.config.tracked_ticket_user_history() or {}
+        if key in history:
+            for item in history[key]:
+                if str(item.get("ticket_channel_id")) == ticket_id:
+                    item["closed_at"] = closed_at
+                    item["close_reason"] = reason
+            await self.config.tracked_ticket_user_history.set(history)
+        log.info("Elrond radar archived backend topic %s for closed ticket %s", backend_thread_id, ticket_id)
+        return True
+
 
     async def _announce_link_required(self, channel, member):
         link_channel_id = await self.config.link_instructions_channel_id()
