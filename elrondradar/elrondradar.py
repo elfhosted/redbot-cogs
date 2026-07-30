@@ -325,6 +325,8 @@ class ElrondRadar(commands.Cog):
         await self.config.tracked_ticket_backend_link_notice_ids.set([])
         await self.config.tracked_ticket_link_notice_ids.set([])
         await self.config.tracked_ticket_identity_resolved.set({})
+        await self.config.tracked_ticket_backend_thread_ids.set({})
+        await self.config.tracked_ticket_user_history.set({})
         await ctx.send("Elrond radar tracked ticket cache cleared.")
 
     @elrondradar.command(name="scantickets")
@@ -531,8 +533,13 @@ class ElrondRadar(commands.Cog):
             user_notes=user_notes,
             support_context=support_context,
         )
+        preview = preview.replace(
+            "Use the button to post a Hermes Elrond diagnosis request into this backchannel topic. Mention Elrond here if it does not auto-start.",
+            "Preview only: the real forum topic will include an Activate Elrond diagnosis button/modal. Mention Elrond in the topic if the button does not auto-start diagnosis.",
+        )
         metadata = [
             "LLM-free intake preview; no thread created, no webhook called, no model used.",
+            "Preview does not include interactive buttons; the real forum topic will.",
             f"Would use backend thread name: 🟡 {thread_username}",
             f"Source message id: {source_message_id}",
         ]
@@ -1108,7 +1115,11 @@ class ElrondRadar(commands.Cog):
                 if response.status >= 300:
                     raise RuntimeError(f"HTTP {response.status} from Elrond {operation}: {text[:200]}")
                 data = await response.json(content_type=None) if text.strip() else {}
-        result = data.get("data") if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return str(data or "")
+        result = data.get("data")
+        if result is None and "output" in data:
+            return str(data.get("output") or "")
         if isinstance(result, dict):
             return str(result.get("output") or result.get("message") or result.get("error") or result)
         return str(result or "")
@@ -1670,20 +1681,21 @@ class ElrondRadar(commands.Cog):
             log.warning("Elrond radar could not create backend topic/thread for ticket channel %s", channel.id)
             return False
         intake_view = DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id, ticket_username)
-        should_post_backend_notice = (backend_thread_created and not initial_notice_posted) or force or channel.id not in tracked_notices
-        if should_post_backend_notice:
-            await self._send_backend_intake_notice(backend_thread, intake_text, intake_view)
-            await self._append_tracked_ticket_id(self.config.tracked_ticket_backend_notice_ids, channel.id)
-            tracked_notices.add(channel.id)
-            log.info("Elrond radar posted backend ticket notice: channel=%s backend_thread=%s reused=%s", channel.id, backend_thread.id, not backend_thread_created)
-        elif backend_thread_created and initial_notice_posted:
+        if backend_thread_created and initial_notice_posted:
             await backend_thread.send(
-                "Hermes Elrond diagnosis/action is available from this topic when staff are ready.",
+                "🧠 Hermes Elrond diagnosis/action is available from this topic when staff are ready.",
                 view=intake_view,
                 allowed_mentions=discord.AllowedMentions.none(),
             )
             await self._append_tracked_ticket_id(self.config.tracked_ticket_backend_notice_ids, channel.id)
             tracked_notices.add(channel.id)
+        else:
+            should_post_backend_notice = force or channel.id not in tracked_notices or (backend_thread_created and not initial_notice_posted)
+            if should_post_backend_notice:
+                await self._send_backend_intake_notice(backend_thread, intake_text, intake_view)
+                await self._append_tracked_ticket_id(self.config.tracked_ticket_backend_notice_ids, channel.id)
+                tracked_notices.add(channel.id)
+                log.info("Elrond radar posted backend ticket notice: channel=%s backend_thread=%s reused=%s", channel.id, backend_thread.id, not backend_thread_created)
         if await self.config.announce_ticket_link() and channel.id not in tracked_backend_links:
             try:
                 await channel.send(
@@ -1694,6 +1706,10 @@ class ElrondRadar(commands.Cog):
                 tracked_backend_links.add(channel.id)
             except (discord.Forbidden, discord.HTTPException) as exc:
                 log.warning("Elrond radar could not announce backend thread in ticket %s: %s", channel.id, exc)
+
+        # Record the Discord-side mapping before the legacy webhook. Hermes/OpenClaw webhook
+        # delivery may be intentionally disabled, but forum lifecycle tracking still needs to work.
+        await self._record_backend_thread(channel, ticket_username or thread_username, backend_thread)
 
         status, body = await self._post_to_elrond({
             "action": "ticket_created",
@@ -1721,7 +1737,6 @@ class ElrondRadar(commands.Cog):
             tracked_identity[tracked_key] = identity_resolved
             tracked_identity = {str(item): tracked_identity.get(str(item), True) for item in tracked_ids}
             await self.config.tracked_ticket_identity_resolved.set(tracked_identity)
-            await self._record_backend_thread(channel, ticket_username or thread_username, backend_thread)
             log.info("Elrond radar ticket intake completed: channel=%s backend_thread=%s", channel.id, backend_thread.id)
             return True
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
