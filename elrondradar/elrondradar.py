@@ -516,6 +516,7 @@ class ElrondRadar(commands.Cog):
         support_context = await self._build_support_context(
             username=ticket_username or thread_username,
             discord_id=str(intake_member.id) if intake_member is not None else "",
+            include_kubernetes=False,
         )
         previous_intakes = await self._format_previous_intakes(ticket_username or thread_username, exclude_ticket_id=channel.id)
         if previous_intakes:
@@ -1229,7 +1230,7 @@ class ElrondRadar(commands.Cog):
             return str(result.get("output") or result.get("message") or result.get("error") or result)
         return str(result or "")
 
-    async def _build_support_context(self, *, username: str, discord_id: str = "") -> str:
+    async def _build_support_context(self, *, username: str, discord_id: str = "", include_billing: bool = True, include_kubernetes: bool = True, context_title: str = "📦 **Support Context**") -> str:
         warnings = []
         resolved_username = self._normalize_username(username)
         user_id = None
@@ -1281,24 +1282,31 @@ class ElrondRadar(commands.Cog):
         apps = tenant.get("apps") if isinstance(tenant, dict) and isinstance(tenant.get("apps"), list) else []
         pods = ""
         top_pods = ""
-        if cluster_name and namespace:
-            try:
-                hr_values = await self._run_read(cluster_name, "get_helmrelease_values", namespace, {"name": resolved_username})
-                metadata_apps, metadata_user_id = self._extract_helm_metadata(hr_values)
-                if not apps and metadata_apps:
-                    apps = metadata_apps
-                if not user_id and metadata_user_id:
-                    user_id = metadata_user_id
-            except Exception as exc:
-                warnings.append("HelmRelease values lookup failed: " + str(exc))
-            try:
-                pods = await self._run_read(cluster_name, "list_pods", namespace, {})
-            except Exception as exc:
-                warnings.append("Pod snapshot failed: " + str(exc))
-            try:
-                top_pods = await self._run_read(cluster_name, "top_pods", namespace, {"containers": True})
-            except Exception as exc:
-                warnings.append("Pod usage lookup failed: " + str(exc))
+        if include_kubernetes:
+            if cluster_name and namespace:
+                try:
+                    hr_values = await self._run_read(cluster_name, "get_helmrelease_values", namespace, {"name": resolved_username})
+                    metadata_apps, metadata_user_id = self._extract_helm_metadata(hr_values)
+                    if not apps and metadata_apps:
+                        apps = metadata_apps
+                    if not user_id and metadata_user_id:
+                        user_id = metadata_user_id
+                except Exception as exc:
+                    warnings.append("HelmRelease values lookup failed: " + str(exc))
+                try:
+                    pods = await self._run_read(cluster_name, "list_pods", namespace, {})
+                except Exception as exc:
+                    warnings.append("Pod snapshot failed: " + str(exc))
+                try:
+                    top_pods = await self._run_read(cluster_name, "top_pods", namespace, {"containers": True})
+                except Exception as exc:
+                    warnings.append("Pod usage lookup failed: " + str(exc))
+            elif namespace:
+                warnings.append("Cluster lookup did not resolve for `" + namespace + "`; skipped Kubernetes snapshots")
+            else:
+                warnings.append("Tenant identity did not resolve; skipped GitOps, billing, and Kubernetes snapshots")
+        elif cluster_name and namespace:
+            warnings.append("Kubernetes snapshot is being collected asynchronously")
         elif namespace:
             warnings.append("Cluster lookup did not resolve for `" + namespace + "`; skipped Kubernetes snapshots")
         else:
@@ -1306,7 +1314,7 @@ class ElrondRadar(commands.Cog):
 
         subscriptions = []
         orders = []
-        if user_id and woo_secret:
+        if include_billing and user_id and woo_secret:
             try:
                 sub_data = await self._support_http_json(woo_url, "/customer/subscriptions", woo_secret, {"customer_id": str(user_id), "active_only": "true"})
                 subscriptions = sub_data.get("subscriptions") if isinstance(sub_data, dict) and isinstance(sub_data.get("subscriptions"), list) else []
@@ -1320,7 +1328,7 @@ class ElrondRadar(commands.Cog):
 
         tenant_node = self._tenant_node_from_pods(pods)
         lines = [
-            "📦 **Support Context**",
+            context_title,
             "Generated: " + time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
             "",
             "👤 **Tenant Details**",
@@ -1330,16 +1338,19 @@ class ElrondRadar(commands.Cog):
             "- Node: `" + self._md_value(tenant_node) + "`",
             "- Store: " + self._store_links(user_id or (tenant.get("userId") if isinstance(tenant, dict) else None)),
             "",
-            "💳 **Subscriptions**",
-            *self._format_subscriptions(subscriptions),
-            "",
-            "🧾 **Recent Orders**",
-            *self._format_orders(orders),
-            "",
             "📦 **Apps Detected**",
             ", ".join("`" + str(app).lower().replace("`", "'") + "`" for app in apps) if apps else "`unknown`",
         ]
-        if profile:
+        if include_billing:
+            lines.extend([
+                "",
+                "💳 **Subscriptions**",
+                *self._format_subscriptions(subscriptions),
+                "",
+                "🧾 **Recent Orders**",
+                *self._format_orders(orders),
+            ])
+        if include_billing and profile:
             lines.extend(["", "👥 **User Details**"])
             for label, key in (("Email", "email"), ("Registered", "dateCreated"), ("Orders", "ordersCount"), ("Total spent", "totalSpent")):
                 if profile.get(key) is not None:
@@ -1782,6 +1793,7 @@ class ElrondRadar(commands.Cog):
         support_context = await self._build_support_context(
             username=ticket_username or thread_username,
             discord_id=str(intake_member.id) if intake_member is not None else "",
+            include_kubernetes=False,
         )
         previous_intakes = await self._format_previous_intakes(ticket_username or thread_username, exclude_ticket_id=channel.id)
         if previous_intakes:
@@ -1807,6 +1819,12 @@ class ElrondRadar(commands.Cog):
         if backend_thread is None:
             log.warning("Elrond radar could not create backend topic/thread for ticket channel %s", channel.id)
             return False
+        if ticket_username or thread_username:
+            asyncio.create_task(self._post_backend_kubernetes_update(
+                backend_thread,
+                ticket_username or thread_username,
+                str(intake_member.id) if intake_member is not None else "",
+            ))
         intake_view = DiagnosisRequestView(self, channel.id, getattr(channel, "name", str(channel.id)), ticket_url, backend_thread.id, source_message_id, ticket_username)
         if backend_thread_created and initial_notice_posted:
             await backend_thread.send(
@@ -1867,7 +1885,19 @@ class ElrondRadar(commands.Cog):
             log.info("Elrond radar ticket intake completed: channel=%s backend_thread=%s", channel.id, backend_thread.id)
             return True
         log.warning("Elrond radar ticket intake webhook failed after creating backend thread: channel=%s status=%s body=%s", channel.id, status, body[:300])
-        return False
+        # The Redbot-created backend forum topic is now the authoritative intake
+        # artifact. Do not keep retrying for minutes just because the legacy
+        # Hermes/OpenClaw webhook is disabled or unavailable after the topic exists.
+        tracked_ids = await self.config.tracked_ticket_channel_ids() or []
+        tracked_ids = [item for item in tracked_ids if item != channel.id]
+        tracked_ids.append(channel.id)
+        tracked_ids = tracked_ids[-500:]
+        await self.config.tracked_ticket_channel_ids.set(tracked_ids)
+        tracked_identity[tracked_key] = identity_resolved
+        tracked_identity = {str(item): tracked_identity.get(str(item), True) for item in tracked_ids}
+        await self.config.tracked_ticket_identity_resolved.set(tracked_identity)
+        log.info("Elrond radar ticket intake completed with backend topic only: channel=%s backend_thread=%s", channel.id, backend_thread.id)
+        return True
 
     async def _was_tracked_ticket_channel(self, channel) -> bool:
         if channel is None:
@@ -2044,6 +2074,22 @@ class ElrondRadar(commands.Cog):
         except (discord.Forbidden, discord.HTTPException):
             return None
         return preferred_fallback or fallback
+
+    async def _post_backend_kubernetes_update(self, backend_thread, username: str, discord_id: str = ""):
+        try:
+            context = await self._build_support_context(
+                username=username,
+                discord_id=discord_id,
+                include_billing=False,
+                include_kubernetes=True,
+                context_title="🔁 **Kubernetes Snapshot Update**",
+            )
+            for chunk in self._split_discord(context):
+                await backend_thread.send(chunk, allowed_mentions=discord.AllowedMentions.none())
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("Elrond radar Kubernetes snapshot update failed for backend thread %s", getattr(backend_thread, "id", None))
 
     async def _source_ticket_channel_from_intake(self, guild: Optional[discord.Guild], channel) -> Optional[discord.abc.GuildChannel]:
         if guild is None or not hasattr(channel, "history"):
