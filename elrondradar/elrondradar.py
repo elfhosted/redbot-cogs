@@ -980,11 +980,72 @@ class ElrondRadar(commands.Cog):
         text = " ".join(str(value or "").split())
         return text[: limit - 1].rstrip() + "…" if len(text) > limit else text
 
+    def _strip_code_fences(self, value: str) -> str:
+        text = str(value or "").strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].strip().startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+        return text
+
     def _code_block(self, value: str, limit: int = 1400, language: str = "text") -> list[str]:
-        text = str(value or "").strip().replace("```", "`\u200b``")
+        text = self._strip_code_fences(value).replace("```", "`\u200b``")
         if len(text) > limit:
             text = text[: limit - 1].rstrip() + "…"
         return ["```" + language, text or "(no output)", "```"]
+
+    def _tenant_node_from_pods(self, pods_output: str) -> str:
+        text = self._strip_code_fences(pods_output)
+        lines = [line for line in text.splitlines() if line.strip()]
+        if len(lines) < 2:
+            return ""
+        header = re.split(r"\s{2,}", lines[0].strip())
+        try:
+            node_index = header.index("NODE")
+        except ValueError:
+            return ""
+        nodes = []
+        for line in lines[1:]:
+            cols = re.split(r"\s{2,}", line.strip())
+            if len(cols) > node_index and cols[node_index] and cols[node_index] not in nodes:
+                nodes.append(cols[node_index])
+        return ", ".join(nodes[:3])
+
+    def _compact_pods_table(self, pods_output: str) -> str:
+        text = self._strip_code_fences(pods_output)
+        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        if len(lines) < 2:
+            return text
+        header = re.split(r"\s{2,}", lines[0].strip())
+        wanted = ["APP", "POD", "READY", "STATUS", "RESTARTS", "AGE"]
+        indexes = []
+        for name in wanted:
+            try:
+                indexes.append(header.index(name))
+            except ValueError:
+                return text
+        rows = []
+        for line in lines[1:]:
+            cols = re.split(r"\s{2,}", line.strip())
+            if len(cols) <= max(indexes):
+                continue
+            rows.append([cols[i] for i in indexes])
+        if not rows:
+            return text
+        widths = [len(name) for name in wanted]
+        for row in rows:
+            for idx, value in enumerate(row):
+                widths[idx] = min(max(widths[idx], len(value)), 32)
+        def trim(value, width):
+            value = str(value)
+            return value if len(value) <= width else value[: max(1, width - 1)] + "…"
+        formatted = ["  ".join(name.ljust(widths[idx]) for idx, name in enumerate(wanted))]
+        for row in rows:
+            formatted.append("  ".join(trim(value, widths[idx]).ljust(widths[idx]) for idx, value in enumerate(row)))
+        return "\n".join(formatted)
 
     def _store_links(self, user_id: Any) -> str:
         clean = str(user_id or "").strip()
@@ -1209,6 +1270,7 @@ class ElrondRadar(commands.Cog):
             except Exception as exc:
                 warnings.append("Order lookup failed: " + str(exc))
 
+        tenant_node = self._tenant_node_from_pods(pods)
         lines = [
             "📦 **Support Context**",
             "Generated: " + time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
@@ -1217,6 +1279,7 @@ class ElrondRadar(commands.Cog):
             "- ElfHosted username: `" + self._md_value(resolved_username) + "`",
             "- Discord: " + ("<@" + discord_id + ">" if discord_id else "`unknown`"),
             "- Datacenter: `" + self._md_value(cluster_name) + "`",
+            "- Node: `" + self._md_value(tenant_node) + "`",
             "- Store: " + self._store_links(user_id or (tenant.get("userId") if isinstance(tenant, dict) else None)),
             "",
             "💳 **Subscriptions**",
@@ -1234,9 +1297,9 @@ class ElrondRadar(commands.Cog):
                 if profile.get(key) is not None:
                     lines.append("- " + label + ": `" + str(profile.get(key)) + "`")
         if top_pods:
-            lines.extend(["", "📊 **Pod Usage**", *self._code_block(top_pods, 1100)])
+            lines.extend(["", "📊 **Pod Usage**", *self._code_block(top_pods, 1300)])
         if pods:
-            lines.extend(["", "📋 **Pods**", *self._code_block(pods, 1200)])
+            lines.extend(["", "📋 **Pods**", *self._code_block(self._compact_pods_table(pods), 1200)])
         if warnings:
             lines.extend(["", "⚠️ **Lookup Warnings**", *("- " + self._truncate_inline(warning, 220) for warning in warnings)])
         return "\n".join(lines)
