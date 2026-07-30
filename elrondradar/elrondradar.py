@@ -521,7 +521,11 @@ class ElrondRadar(commands.Cog):
             f"Would use backend thread name: 🟡 {thread_username}",
             f"Source message id: {source_message_id}",
         ]
-        await ctx.send(("\n".join(metadata) + "\n\n" + preview)[:1900], allowed_mentions=discord.AllowedMentions.none())
+        preview_text = "\n".join(metadata) + "\n\n" + preview
+        chunks = self._split_discord(preview_text)
+        for index, chunk in enumerate(chunks):
+            prefix = "" if index == 0 else f"LLM-free intake preview continued ({index + 1}/{len(chunks)}):\n\n"
+            await ctx.send(prefix + chunk, allowed_mentions=discord.AllowedMentions.none())
 
     @elrondradar.command(name="test")
     async def test(self, ctx, channel_id: int, message_id: int, emoji: str = "👀"):
