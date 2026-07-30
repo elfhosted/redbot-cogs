@@ -538,15 +538,15 @@ class ElrondRadar(commands.Cog):
             "Preview only: the real forum topic will include an Activate Elrond diagnosis button/modal. Mention Elrond in the topic if the button does not auto-start diagnosis.",
         )
         metadata = [
-            "LLM-free intake preview; no thread created, no webhook called, no model used.",
-            "Preview does not include interactive buttons; the real forum topic will.",
-            f"Would use backend thread name: 🟡 {thread_username}",
+            "Preview only; no thread created and no webhook called.",
+            "Interactive buttons appear only in the real forum topic.",
+            f"Would use backend topic name: 🟡 {thread_username}",
             f"Source message id: {source_message_id}",
         ]
         preview_text = "\n".join(metadata) + "\n\n" + preview
         chunks = self._split_discord(preview_text)
         for index, chunk in enumerate(chunks):
-            prefix = "" if index == 0 else f"LLM-free intake preview continued ({index + 1}/{len(chunks)}):\n\n"
+            prefix = "" if index == 0 else f"Intake preview continued ({index + 1}/{len(chunks)}):\n\n"
             await ctx.send(prefix + chunk, allowed_mentions=discord.AllowedMentions.none())
 
     @elrondradar.command(name="test")
@@ -1047,6 +1047,53 @@ class ElrondRadar(commands.Cog):
             formatted.append("  ".join(trim(value, widths[idx]).ljust(widths[idx]) for idx, value in enumerate(row)))
         return "\n".join(formatted)
 
+    def _compact_pod_usage_table(self, usage_output: str, username: str = "") -> str:
+        text = self._strip_code_fences(usage_output)
+        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        if len(lines) < 2:
+            return text
+        header = re.split(r"\s{2,}", lines[0].strip())
+        wanted = [("POD", "APP"), ("CONTAINER", "CONTAINER"), ("CPU(cores)", "CPU"), ("MEMORY(bytes)", "MEM")]
+        indexes = []
+        for source, _label in wanted:
+            try:
+                indexes.append(header.index(source))
+            except ValueError:
+                return text
+        prefix = (self._normalize_username(username) + "-") if username else ""
+        rows = []
+        seen = set()
+        for line in lines[1:]:
+            cols = re.split(r"\s{2,}", line.strip())
+            if len(cols) <= max(indexes):
+                continue
+            pod, container, cpu, memory = (cols[i] for i in indexes)
+            app = pod
+            if prefix and app.startswith(prefix):
+                app = app[len(prefix):]
+            app = re.sub(r"-[0-9a-f]{8,10}-[a-z0-9]{5}$", "", app)
+            app = re.sub(r"-[0-9a-f]{9,}$", "", app)
+            row = [app, container, cpu, memory]
+            key = tuple(row)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(row)
+        if not rows:
+            return text
+        labels = [label for _source, label in wanted]
+        widths = [len(label) for label in labels]
+        for row in rows:
+            for idx, value in enumerate(row):
+                widths[idx] = min(max(widths[idx], len(value)), 28)
+        def trim(value, width):
+            value = str(value)
+            return value if len(value) <= width else value[: max(1, width - 1)] + "…"
+        formatted = ["  ".join(label.ljust(widths[idx]) for idx, label in enumerate(labels))]
+        for row in rows:
+            formatted.append("  ".join(trim(value, widths[idx]).ljust(widths[idx]) for idx, value in enumerate(row)))
+        return "\n".join(formatted)
+
     def _store_links(self, user_id: Any) -> str:
         clean = str(user_id or "").strip()
         if not clean:
@@ -1297,7 +1344,7 @@ class ElrondRadar(commands.Cog):
                 if profile.get(key) is not None:
                     lines.append("- " + label + ": `" + str(profile.get(key)) + "`")
         if top_pods:
-            lines.extend(["", "📊 **Pod Usage**", *self._code_block(top_pods, 1300)])
+            lines.extend(["", "📊 **Pod Usage**", *self._code_block(self._compact_pod_usage_table(top_pods, resolved_username), 1800)])
         if pods:
             lines.extend(["", "📋 **Pods**", *self._code_block(self._compact_pods_table(pods), 1200)])
         if warnings:
