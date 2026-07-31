@@ -989,15 +989,64 @@ class ElrondRadar(commands.Cog):
             text = "\n".join(lines).strip()
         return text
 
+    def _table_lines_from_output(self, value: str, required: tuple[str, ...]) -> list[str]:
+        text = self._strip_code_fences(value)
+        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        for idx, line in enumerate(lines):
+            header = re.split(r"\s{2,}", line.strip())
+            if all(name in header for name in required):
+                return lines[idx:]
+        return lines
+
+    def _compact_k8s_workload_name(self, value: Any, username: str = "") -> str:
+        text = str(value or "").strip()
+        prefix = (self._normalize_username(username) + "-") if username else ""
+        if prefix and text.startswith(prefix):
+            text = text[len(prefix):]
+        parts = text.rsplit("-", 2)
+        if (
+            len(parts) == 3
+            and re.fullmatch(r"[a-z0-9]{8,10}", parts[1] or "")
+            and re.fullmatch(r"[a-z0-9]{5}", parts[2] or "")
+            and any(char.isdigit() for char in parts[1] + parts[2])
+        ):
+            text = parts[0]
+        return text
+
     def _code_block(self, value: str, limit: int = 1400, language: str = "text") -> list[str]:
         text = self._strip_code_fences(value).replace("```", "`\u200b``")
         if len(text) > limit:
             text = text[: limit - 1].rstrip() + "…"
         return ["```" + language, text or "(no output)", "```"]
 
+    def _code_blocks(self, value: str, limit: int = 1050, language: str = "text") -> list[str]:
+        text = self._strip_code_fences(value).replace("```", "`\u200b``")
+        lines = text.splitlines() or ["(no output)"]
+        blocks = []
+        current = []
+
+        def flush():
+            if current:
+                blocks.extend(["```" + language, "\n".join(current), "```", ""])
+                current.clear()
+
+        for line in lines:
+            remaining = line
+            while len(remaining) > limit:
+                flush()
+                blocks.extend(["```" + language, remaining[:limit], "```"])
+                remaining = remaining[limit:]
+            candidate = "\n".join([*current, remaining]) if current else remaining
+            if current and len(candidate) > limit:
+                flush()
+            current.append(remaining)
+        flush()
+        if blocks and blocks[-1] == "":
+            blocks.pop()
+        return blocks
+
     def _tenant_node_from_pods(self, pods_output: str) -> str:
-        text = self._strip_code_fences(pods_output)
-        lines = [line for line in text.splitlines() if line.strip()]
+        lines = self._table_lines_from_output(pods_output, ("NODE",))
         if len(lines) < 2:
             return ""
         header = re.split(r"\s{2,}", lines[0].strip())
@@ -1014,7 +1063,7 @@ class ElrondRadar(commands.Cog):
 
     def _compact_pods_table(self, pods_output: str) -> str:
         text = self._strip_code_fences(pods_output)
-        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        lines = self._table_lines_from_output(pods_output, ("APP", "POD", "READY", "STATUS"))
         if len(lines) < 2:
             return text
         header = re.split(r"\s{2,}", lines[0].strip())
@@ -1030,7 +1079,13 @@ class ElrondRadar(commands.Cog):
             cols = re.split(r"\s{2,}", line.strip())
             if len(cols) <= max(indexes):
                 continue
-            rows.append([cols[i] for i in indexes])
+            row = [cols[i] for i in indexes]
+            try:
+                pod_col = wanted.index("POD")
+                row[pod_col] = self._compact_k8s_workload_name(row[pod_col])
+            except ValueError:
+                pass
+            rows.append(row)
         if not rows:
             return text
         widths = [len(name) for name in wanted]
@@ -1047,31 +1102,30 @@ class ElrondRadar(commands.Cog):
 
     def _compact_pod_usage_table(self, usage_output: str, username: str = "") -> str:
         text = self._strip_code_fences(usage_output)
-        lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+        lines = self._table_lines_from_output(usage_output, ("CPU(cores)", "MEMORY(bytes)"))
         if len(lines) < 2:
             return text
         header = re.split(r"\s{2,}", lines[0].strip())
-        wanted = [("POD", "APP"), ("CONTAINER", "CONTAINER"), ("CPU(cores)", "CPU"), ("MEMORY(bytes)", "MEM")]
+        pod_header = "POD" if "POD" in header else "NAME"
+        wanted = [(pod_header, "APP")]
+        if "CONTAINER" in header:
+            wanted.append(("CONTAINER", "CONTAINER"))
+        wanted.extend([("CPU(cores)", "CPU"), ("MEMORY(bytes)", "MEM")])
         indexes = []
         for source, _label in wanted:
             try:
                 indexes.append(header.index(source))
             except ValueError:
                 return text
-        prefix = (self._normalize_username(username) + "-") if username else ""
         rows = []
         seen = set()
         for line in lines[1:]:
             cols = re.split(r"\s{2,}", line.strip())
             if len(cols) <= max(indexes):
                 continue
-            pod, container, cpu, memory = (cols[i] for i in indexes)
-            app = pod
-            if prefix and app.startswith(prefix):
-                app = app[len(prefix):]
-            app = re.sub(r"-[0-9a-f]{8,10}-[a-z0-9]{5}$", "", app)
-            app = re.sub(r"-[0-9a-f]{9,}$", "", app)
-            row = [app, container, cpu, memory]
+            values = [cols[i] for i in indexes]
+            values[0] = self._compact_k8s_workload_name(values[0], username)
+            row = values
             key = tuple(row)
             if key in seen:
                 continue
@@ -1356,9 +1410,9 @@ class ElrondRadar(commands.Cog):
                 if profile.get(key) is not None:
                     lines.append("- " + label + ": `" + str(profile.get(key)) + "`")
         if top_pods:
-            lines.extend(["", "📊 **Pod Usage**", *self._code_block(self._compact_pod_usage_table(top_pods, resolved_username), 1800)])
+            lines.extend(["", "📊 **Pod Usage**", *self._code_blocks(self._compact_pod_usage_table(top_pods, resolved_username), 1050)])
         if pods:
-            lines.extend(["", "📋 **Pods**", *self._code_block(self._compact_pods_table(pods), 1200)])
+            lines.extend(["", "📋 **Pods**", *self._code_blocks(self._compact_pods_table(pods), 1050)])
         if warnings:
             lines.extend(["", "⚠️ **Lookup Warnings**", *("- " + self._truncate_inline(warning, 220) for warning in warnings)])
         return "\n".join(lines)
