@@ -1,8 +1,12 @@
 import ast
+import os
 import re
+import time
 import unittest
+import urllib.parse
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Tuple
+from unittest.mock import patch
 
 
 METHODS = {
@@ -16,6 +20,15 @@ METHODS = {
     "_compact_pods_table",
     "_compact_pod_usage_table",
     "_split_discord",
+    "_truncate_inline",
+    "_md_value",
+    "_store_links",
+    "_admin_post_link",
+    "_format_subscriptions",
+    "_format_orders",
+    "_support_jsonrpc_text",
+    "_discord_linked_user_id",
+    "_build_support_context",
 }
 
 
@@ -35,12 +48,12 @@ def load_subject_class():
             if any(name in {"USERNAME_RE", "USERNAME_STOPWORDS"} for name in names):
                 module_body.append(node)
         if isinstance(node, ast.ClassDef) and node.name == "ElrondRadar":
-            methods = [item for item in node.body if isinstance(item, ast.FunctionDef) and item.name in METHODS]
+            methods = [item for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name in METHODS]
             module_body.append(ast.ClassDef(name="Subject", bases=[], keywords=[], body=methods, decorator_list=[]))
             break
     test_module = ast.Module(body=module_body, type_ignores=[])
     ast.fix_missing_locations(test_module)
-    ns = {"re": re, "Any": Any, "Optional": Any, "Tuple": tuple}
+    ns = {"os": os, "re": re, "time": time, "urllib": urllib, "Any": Any, "Optional": Optional, "Tuple": Tuple}
     exec(compile(test_module, str(source_path), "exec"), ns)
     return ns["Subject"]
 
@@ -105,6 +118,93 @@ plex    plex-very-long-name-8k9l0m1n2p-zz99q  1/1    Running  2         3d   nod
         for chunk in chunks:
             self.assertLessEqual(len(chunk), 1800)
             self.assertEqual(chunk.count("```") % 2, 0, chunk)
+
+
+class ElrondRadarIdentityResolutionTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.subject = load_subject_class()()
+
+    async def test_discord_linked_profile_overrides_wrong_supplied_username(self):
+        async def fake_discord_linked_user_id(discord_id):
+            self.assertEqual(discord_id, "1472032059756122203")
+            return 4242
+
+        calls = []
+
+        async def fake_support_http_json(base_url, path, secret, params=None, timeout=15):
+            calls.append((path, dict(params or {})))
+            if path == "/customer/profile":
+                self.assertEqual(params, {"customer_id": "4242"})
+                return {"id": 4242, "username": "spence23"}
+            if path == "/tenant/lookup":
+                self.assertEqual(params, {"username": "spence23"})
+                return {"cluster": "elfhosted.cafe", "apps": ["comet"], "userId": 4242}
+            raise AssertionError(path)
+
+        self.subject._discord_linked_user_id = fake_discord_linked_user_id
+        self.subject._support_http_json = fake_support_http_json
+        with patch.dict(os.environ, {"WOO_SECRET": "woo", "GITOPS_SECRET": "gitops", "DISCORDBOT_SECRET": "discord"}, clear=True):
+            context = await self.subject._build_support_context(
+                username="spence",
+                discord_id="1472032059756122203",
+                include_kubernetes=False,
+            )
+
+        self.assertIn("ElfHosted username: `spence23`", context)
+        self.assertIn(
+            "Discord-linked billing profile username `spence23` differs from supplied ticket username `spence`; using verified Discord-linked billing username",
+            context,
+        )
+        self.assertIn("`comet`", context)
+        self.assertIn(("/customer/profile", {"customer_id": "4242"}), calls)
+        self.assertIn(("/tenant/lookup", {"username": "spence23"}), calls)
+
+    async def test_discord_id_parser_rejects_unlinked_message_containing_discord_digits(self):
+        async def fake_jsonrpc(base_url, secret, tool_name, args, timeout=10):
+            return "No user linked to Discord ID 1472032059756122203"
+
+        self.subject._support_jsonrpc_text = fake_jsonrpc
+        with patch.dict(os.environ, {"DISCORDBOT_SECRET": "discord"}, clear=True):
+            self.assertIsNone(await self.subject._discord_linked_user_id("1472032059756122203"))
+
+    async def test_discord_id_parser_requires_bare_positive_integer(self):
+        async def fake_jsonrpc(base_url, secret, tool_name, args, timeout=10):
+            return "WordPress User ID: 4242"
+
+        self.subject._support_jsonrpc_text = fake_jsonrpc
+        with patch.dict(os.environ, {"DISCORDBOT_SECRET": "discord"}, clear=True):
+            self.assertIsNone(await self.subject._discord_linked_user_id("1472032059756122203"))
+
+    async def test_invalid_discord_profile_does_not_skip_supplied_username_search(self):
+        async def fake_discord_linked_user_id(discord_id):
+            return 4242
+
+        calls = []
+
+        async def fake_support_http_json(base_url, path, secret, params=None, timeout=15):
+            calls.append((path, dict(params or {})))
+            if path == "/customer/profile":
+                return {"id": 4242}
+            if path == "/customer/search":
+                self.assertEqual(params, {"query": "spence"})
+                return {"customers": [{"id": 99, "username": "spence"}]}
+            if path == "/tenant/lookup":
+                self.assertEqual(params, {"username": "spence"})
+                return {"cluster": "elfhosted.cafe", "apps": ["comet"], "userId": 99}
+            raise AssertionError(path)
+
+        self.subject._discord_linked_user_id = fake_discord_linked_user_id
+        self.subject._support_http_json = fake_support_http_json
+        with patch.dict(os.environ, {"WOO_SECRET": "woo", "GITOPS_SECRET": "gitops", "DISCORDBOT_SECRET": "discord"}, clear=True):
+            context = await self.subject._build_support_context(
+                username="spence",
+                discord_id="1472032059756122203",
+                include_kubernetes=False,
+            )
+
+        self.assertIn("ElfHosted username: `spence`", context)
+        self.assertIn(("/customer/search", {"query": "spence"}), calls)
+        self.assertIn(("/tenant/lookup", {"username": "spence"}), calls)
 
 
 if __name__ == "__main__":
