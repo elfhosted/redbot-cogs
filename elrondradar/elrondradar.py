@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import re
@@ -1249,6 +1250,38 @@ class ElrondRadar(commands.Cog):
                     raise RuntimeError(f"HTTP {response.status} from {path}: {text[:200]}")
                 return await response.json(content_type=None) if text.strip() else {}
 
+    async def _support_jsonrpc_text(self, base_url: str, secret: str, tool_name: str, args: dict[str, str], *, timeout: int = 10) -> str:
+        headers = {"Accept": "application/json", "Authorization": "Bearer " + secret, "Content-Type": "application/json"}
+        payload = {"jsonrpc": "2.0", "id": int(time.time() * 1000), "method": "tools/call", "params": {"name": tool_name, "arguments": args}}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(base_url.rstrip("/"), json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                text = await response.text()
+                if response.status >= 300:
+                    raise RuntimeError(f"HTTP {response.status} from {tool_name}: {text[:200]}")
+                data = json.loads(text) if text.strip() else {}
+        if isinstance(data, dict) and data.get("error"):
+            error = data.get("error")
+            raise RuntimeError(str(error.get("message") if isinstance(error, dict) else error))
+        content = data.get("result", {}).get("content") if isinstance(data, dict) else None
+        if isinstance(content, list):
+            return "".join(str(item.get("text") or "") for item in content if isinstance(item, dict)).strip()
+        result = data.get("result") if isinstance(data, dict) else data
+        return str(result or "").strip()
+
+    async def _discord_linked_user_id(self, discord_id: str) -> Optional[int]:
+        clean_discord = str(discord_id or "").strip()
+        if not clean_discord:
+            return None
+        base_url = os.getenv("ELROND_DISCORD_BOT_MCP_URL") or os.getenv("DISCORD_BOT_MCP_URL") or "http://discord-auth.discord-auth:3000/mcp"
+        secret = os.getenv("ELROND_DISCORD_BOT_MCP_SECRET") or os.getenv("DISCORDBOT_SECRET") or os.getenv("DISCORD_BOT_MCP_SECRET") or ""
+        if not secret:
+            return None
+        result = await self._support_jsonrpc_text(base_url, secret, "get_userid_from_discordid", {"discord_id": clean_discord})
+        text = str(result or "").strip()
+        if not re.fullmatch(r"[1-9]\d*", text):
+            return None
+        return int(text)
+
     def _elrond_base_url(self, cluster: str) -> str:
         suffix = str(cluster or "").upper().replace(".", "_").replace("-", "_")
         defaults = {
@@ -1295,7 +1328,27 @@ class ElrondRadar(commands.Cog):
         woo_secret = os.getenv("ELROND_WOO_SECRET") or os.getenv("WOO_SECRET") or ""
         gitops_secret = os.getenv("ELROND_GITOPS_SECRET") or os.getenv("GITOPS_SECRET") or ""
 
-        if resolved_username and woo_secret:
+        discord_lookup_secret = os.getenv("ELROND_DISCORD_BOT_MCP_SECRET") or os.getenv("DISCORDBOT_SECRET") or os.getenv("DISCORD_BOT_MCP_SECRET") or ""
+        if discord_id and woo_secret and discord_lookup_secret:
+            try:
+                linked_user_id = await self._discord_linked_user_id(discord_id)
+                if linked_user_id:
+                    linked_profile = await self._support_http_json(woo_url, "/customer/profile", woo_secret, {"customer_id": str(linked_user_id)})
+                    profile_username = self._normalize_username(linked_profile.get("username")) if isinstance(linked_profile, dict) else ""
+                    if profile_username:
+                        user_id = linked_user_id
+                        profile = linked_profile
+                        if resolved_username and profile_username != resolved_username:
+                            warnings.append("Discord-linked billing profile username `" + profile_username + "` differs from supplied ticket username `" + resolved_username + "`; using verified Discord-linked billing username for GitOps lookup.")
+                        resolved_username = profile_username
+                    else:
+                        warnings.append("Discord-linked billing profile did not include a username; using supplied ticket username lookup")
+            except Exception as exc:
+                warnings.append("Discord-linked billing lookup failed: " + str(exc))
+        elif discord_id and woo_secret:
+            warnings.append("Discord link lookup secret is not configured")
+
+        if resolved_username and woo_secret and not user_id:
             try:
                 search = await self._support_http_json(woo_url, "/customer/search", woo_secret, {"query": resolved_username})
                 customers = search.get("customers") if isinstance(search, dict) else []
@@ -1314,7 +1367,7 @@ class ElrondRadar(commands.Cog):
         elif not woo_secret:
             warnings.append("Woo lookup secret is not configured")
 
-        if user_id and woo_secret:
+        if user_id and woo_secret and profile is None:
             try:
                 profile = await self._support_http_json(woo_url, "/customer/profile", woo_secret, {"customer_id": str(user_id)})
                 resolved_username = self._normalize_username(profile.get("username")) or resolved_username
